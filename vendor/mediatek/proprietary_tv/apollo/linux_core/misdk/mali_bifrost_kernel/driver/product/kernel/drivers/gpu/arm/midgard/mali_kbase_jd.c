@@ -173,7 +173,13 @@ static void kbase_jd_post_external_resources(struct kbase_jd_atom *katom)
 
 		res_no = katom->nr_extres;
 		while (res_no-- > 0) {
-			kbase_unmap_external_resource(katom->kctx, katom->extres[res_no]);
+			struct kbase_mem_phy_alloc *alloc = katom->extres[res_no].alloc;
+			struct kbase_va_region *reg;
+
+			reg = kbase_region_tracker_find_region_base_address(
+					katom->kctx,
+					katom->extres[res_no].gpu_address);
+			kbase_unmap_external_resource(katom->kctx, reg, alloc);
 		}
 		kfree(katom->extres);
 		katom->extres = NULL;
@@ -189,7 +195,7 @@ static void kbase_jd_post_external_resources(struct kbase_jd_atom *katom)
 
 static int kbase_jd_pre_external_resources(struct kbase_jd_atom *katom, const struct base_jd_atom_v2 *user_atom)
 {
-	int err = -EINVAL;
+	int err_ret_val = -EINVAL;
 	u32 res_no;
 #ifdef CONFIG_MALI_DMA_FENCE
 	struct kbase_dma_fence_resv_info info = {
@@ -217,13 +223,25 @@ static int kbase_jd_pre_external_resources(struct kbase_jd_atom *katom, const st
 		return -EINVAL;
 
 	katom->extres = kmalloc_array(katom->nr_extres, sizeof(*katom->extres), GFP_KERNEL);
-	if (!katom->extres)
-		return -ENOMEM;
+	if (NULL == katom->extres) {
+		err_ret_val = -ENOMEM;
+		goto early_err_out;
+	}
 
-	input_extres = kmalloc_array(katom->nr_extres, sizeof(*input_extres), GFP_KERNEL);
-	if (!input_extres) {
-		err = -ENOMEM;
-		goto failed_input_alloc;
+	/* copy user buffer to the end of our real buffer.
+	 * Make sure the struct sizes haven't changed in a way
+	 * we don't support */
+	BUILD_BUG_ON(sizeof(*input_extres) > sizeof(*katom->extres));
+	input_extres = (struct base_external_resource *)
+			(((unsigned char *)katom->extres) +
+			(sizeof(*katom->extres) - sizeof(*input_extres)) *
+			katom->nr_extres);
+
+	if (copy_from_user(input_extres,
+			get_compat_pointer(katom->kctx, user_atom->extres_list),
+			sizeof(*input_extres) * katom->nr_extres) != 0) {
+		err_ret_val = -EINVAL;
+		goto early_err_out;
 	}
 
 #ifdef CONFIG_MALI_DMA_FENCE
@@ -232,26 +250,19 @@ static int kbase_jd_pre_external_resources(struct kbase_jd_atom *katom, const st
 					sizeof(struct reservation_object *),
 					GFP_KERNEL);
 		if (!info.resv_objs) {
-			err = -ENOMEM;
-			goto failed_input_copy;
+			err_ret_val = -ENOMEM;
+			goto early_err_out;
 		}
 
 		info.dma_fence_excl_bitmap =
 				kcalloc(BITS_TO_LONGS(katom->nr_extres),
 					sizeof(unsigned long), GFP_KERNEL);
 		if (!info.dma_fence_excl_bitmap) {
-			err = -ENOMEM;
-			goto failed_input_copy;
+			err_ret_val = -ENOMEM;
+			goto early_err_out;
 		}
 	}
 #endif /* CONFIG_MALI_DMA_FENCE */
-
-	if (copy_from_user(input_extres,
-				get_compat_pointer(katom->kctx, user_atom->extres_list),
-				sizeof(*input_extres) * katom->nr_extres) != 0) {
-		err = -EINVAL;
-		goto failed_input_copy;
-	}
 
 	/* Take the processes mmap lock */
 	down_read(&current->mm->mmap_sem);
@@ -259,17 +270,19 @@ static int kbase_jd_pre_external_resources(struct kbase_jd_atom *katom, const st
 	/* need to keep the GPU VM locked while we set up UMM buffers */
 	kbase_gpu_vm_lock(katom->kctx);
 	for (res_no = 0; res_no < katom->nr_extres; res_no++) {
-		struct base_external_resource *user_res = &input_extres[res_no];
+		struct base_external_resource *res;
 		struct kbase_va_region *reg;
+		struct kbase_mem_phy_alloc *alloc;
 		bool exclusive;
 
-		exclusive = (user_res->ext_resource & BASE_EXT_RES_ACCESS_EXCLUSIVE)
-			? true : false;
+		res = &input_extres[res_no];
+		exclusive = (res->ext_resource & BASE_EXT_RES_ACCESS_EXCLUSIVE)
+				? true : false;
 		reg = kbase_region_tracker_find_region_enclosing_address(
 				katom->kctx,
-				user_res->ext_resource & ~BASE_EXT_RES_ACCESS_EXCLUSIVE);
+				res->ext_resource & ~BASE_EXT_RES_ACCESS_EXCLUSIVE);
 		/* did we find a matching region object? */
-		if (unlikely(kbase_is_region_invalid_or_free(reg))) {
+		if (NULL == reg || (reg->flags & KBASE_REG_FREE)) {
 			/* roll back */
 			goto failed_loop;
 		}
@@ -279,9 +292,12 @@ static int kbase_jd_pre_external_resources(struct kbase_jd_atom *katom, const st
 			katom->atom_flags |= KBASE_KATOM_FLAG_PROTECTED;
 		}
 
-		err = kbase_map_external_resource(katom->kctx, reg, current->mm);
-		if (err)
+		alloc = kbase_map_external_resource(katom->kctx, reg,
+				current->mm);
+		if (!alloc) {
+			err_ret_val = -EINVAL;
 			goto failed_loop;
+		}
 
 #ifdef CONFIG_MALI_DMA_FENCE
 		if (implicit_sync &&
@@ -294,7 +310,15 @@ static int kbase_jd_pre_external_resources(struct kbase_jd_atom *katom, const st
 								exclusive);
 		}
 #endif /* CONFIG_MALI_DMA_FENCE */
-		katom->extres[res_no] = reg;
+
+		/* finish with updating out array with the data we found */
+		/* NOTE: It is important that this is the last thing we do (or
+		 * at least not before the first write) as we overwrite elements
+		 * as we loop and could be overwriting ourself, so no writes
+		 * until the last read for an element.
+		 * */
+		katom->extres[res_no].gpu_address = reg->start_pfn << PAGE_SHIFT; /* save the start_pfn (as an address, not pfn) to use fast lookup later */
+		katom->extres[res_no].alloc = alloc;
 	}
 	/* successfully parsed the extres array */
 	/* drop the vm lock now */
@@ -318,9 +342,6 @@ static int kbase_jd_pre_external_resources(struct kbase_jd_atom *katom, const st
 	}
 #endif /* CONFIG_MALI_DMA_FENCE */
 
-	/* Free the buffer holding data from userspace */	
-	kfree(input_extres);
-
 	/* all done OK */
 	return 0;
 
@@ -336,22 +357,18 @@ failed_dma_fence_setup:
 #endif
 
  failed_loop:
-	/* undo the loop work. We are guaranteed to have access to the VA region
-	 * as we hold a reference to it until it's unmapped
-	 */
+	/* undo the loop work */
 	while (res_no-- > 0) {
-		struct kbase_va_region *reg = katom->extres[res_no];
+		struct kbase_mem_phy_alloc *alloc = katom->extres[res_no].alloc;
 
-		kbase_unmap_external_resource(katom->kctx, reg);
+		kbase_unmap_external_resource(katom->kctx, NULL, alloc);
 	}
 	kbase_gpu_vm_unlock(katom->kctx);
 
 	/* Release the processes mmap lock */
 	up_read(&current->mm->mmap_sem);
 
-failed_input_copy:
-	kfree(input_extres);
-failed_input_alloc:
+ early_err_out:
 	kfree(katom->extres);
 	katom->extres = NULL;
 #ifdef CONFIG_MALI_DMA_FENCE
@@ -360,7 +377,7 @@ failed_input_alloc:
 		kfree(info.dma_fence_excl_bitmap);
 	}
 #endif
-	return err;
+	return err_ret_val;
 }
 
 static inline void jd_resolve_dep(struct list_head *out_list,
