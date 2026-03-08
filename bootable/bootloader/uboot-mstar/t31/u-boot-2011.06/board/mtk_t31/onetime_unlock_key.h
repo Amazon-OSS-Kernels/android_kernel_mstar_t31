@@ -7,7 +7,7 @@
 
 #if defined(UFBL_FEATURE_ONETIME_UNLOCK)
 #ifdef CONFIG_MSTAR_M7332
-#if defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC)
+#if defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_CHEYNE)
 #define ONETIME_UNLOCK_KEY \
 	"\x30\x82\x01\x22\x30\x0d\x06\x09\x2a\x86\x48\x86\xf7\x0d\x01\x01" \
 	"\x01\x05\x00\x03\x82\x01\x0f\x00\x30\x82\x01\x0a\x02\x82\x01\x01" \
@@ -49,7 +49,7 @@
 	"\xf7\x1d\x07\xe5\x75\x2c\xc7\x3a\x0c\x31\x51\xf4\x92\xe0\x85\xd7" \
 	"\xdd\x1e\xe3\x55\x58\x9c\x33\x63\xc7\x98\xbd\xab\x24\xc1\x38\xff" \
 	"\x93\x02\x03\x01\x00\x01"
-#endif //CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC
+#endif //CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_CHEYNE
 #else
 /* Brandenburg/ABC/Kayala NA */
 #if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_BRANDENBURG)

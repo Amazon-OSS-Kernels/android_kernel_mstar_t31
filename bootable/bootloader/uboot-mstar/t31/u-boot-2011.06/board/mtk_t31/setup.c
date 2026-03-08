@@ -51,7 +51,7 @@ int amzn_verify_dtb(void *dtb_buf, int maxLength)
 	}
 	unsigned int key_len = 0;
 	const uint8_t *key = NULL;
-#if defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332) || defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC) || defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC)
+#if defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332) || defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC) || defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_CHEYNE)
 	key = amzn_get_boot_key(&key_len);
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ANNA)
 	key = amzn_get_sign_key(&key_len);
@@ -257,7 +257,7 @@ int amzn_boot(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[])
                 run_command(buffer, 0);
 #else
 		char *bg_color="0x8000ff00";
-#if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ANNA) || defined(CONFIG_MTK_BD_MT164B_10AT_M7632_BRANDENBURG) || defined (CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC)
+#if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ANNA) || defined(CONFIG_MTK_BD_MT164B_10AT_M7632_BRANDENBURG) || defined (CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_CHEYNE)
 		if(!anti_rb_enabled()) {
 			bg_color="0x80ff0000";
                         printf("device is [UNLOCKED]\n");
@@ -271,7 +271,7 @@ int amzn_boot(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[])
 
                 memset(buffer, 0 , CMD_BUF);
 		snprintf(buffer, CMD_BUF, "draw_string %d %d 0x3fffffff 0 OK", GRAPHIC_X, GRAPHIC_Y);
-#if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ANNA) || defined(CONFIG_MTK_BD_MT164B_10AT_M7632_BRANDENBURG) || defined (CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC)
+#if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ANNA) || defined(CONFIG_MTK_BD_MT164B_10AT_M7632_BRANDENBURG) || defined (CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_CHEYNE)
                 memset(buffer, 0, CMD_BUF);
 		if (anti_rb_enabled()) {
 			snprintf(buffer, CMD_BUF, "draw_string %d %d 0x300000000 0 LOCKED", 290, 250);
@@ -533,8 +533,8 @@ sbvc_result sboot_version_check(uchar* sboot_buf, int sboot_len)
 	prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "skipper", PROD_LEN);
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ANNA)
 	prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "anna", PROD_LEN);
-#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_TEDDY)
-        prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "teddy", PROD_LEN);
+#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ABC)
+        prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "ABC", PROD_LEN);
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_HAILEY)
 	prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "hailey", PROD_LEN);
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_JULIANA)
@@ -543,8 +543,8 @@ sbvc_result sboot_version_check(uchar* sboot_buf, int sboot_len)
         prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "ABC", PROD_LEN);
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_SHELLY)
 	prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "shelly", PROD_LEN);
-#elif defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC)
-        prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "ABC", PROD_LEN);
+#elif defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_CHEYNE)
+        prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "cheyne", PROD_LEN);
 #endif
 	if (!prod_match) {
 		printf("\n!!Device:%s, sboot:%.*s!!\n", amzn_target_device_name(), PROD_LEN,
@@ -602,7 +602,7 @@ sbvc_result sboot_version_check(uchar* sboot_buf, int sboot_len)
 		version_bump = 0x22;
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ANNA)
 		version_bump = 0x17;
-#elif defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC)
+#elif defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_CHEYNE)
 		version_bump = 0x05;
 #endif
 		if ((version_bump != 0) && (sboot_ver_dev >= version_bump) && (sboot_ver < version_bump )) {

@@ -21,8 +21,8 @@ const char *amzn_target_device_name(void)
   return "skipper";
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ANNA)
   return "anna";
-#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_TEDDY)
-  return "teddy";
+#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ABC)
+  return "ABC";
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_HAILEY)
   return "hailey";
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_JULIANA)
@@ -31,8 +31,8 @@ const char *amzn_target_device_name(void)
   return "ABC";
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_SHELLY)
   return "shelly";
-#elif defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC)
-  return "ABC";
+#elif defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_CHEYNE)
+  return "cheyne";
 #endif
 }
 
@@ -103,7 +103,7 @@ const unsigned char *amzn_get_unlock_key(unsigned int *key_len)
     "\xc0\xcf\x23\xcd\xdb\x69\x81\x9e\xf7\xde\xc4\x37\x3d\x6f\x0e\x2a"
     "\xf3\x02\x03\x01\x00\x01"
     ;
-#elif defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC)
+#elif defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_CHEYNE)
   static const unsigned char unlock_key[] =
     "\x30\x82\x01\x22\x30\x0d\x06\x09\x2a\x86\x48\x86\xf7\x0d\x01\x01"
     "\x01\x05\x00\x03\x82\x01\x0f\x00\x30\x82\x01\x0a\x02\x82\x01\x01"
@@ -229,7 +229,7 @@ const unsigned char *amzn_get_sign_key(unsigned int *key_len)
 }
 #endif
 
-#if defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332) || defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC) || defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC)
+#if defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332) || defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC) || defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_CHEYNE)
 const unsigned char *amzn_get_boot_key(unsigned int *key_len)
 {
   static const unsigned char boot_key[] =
