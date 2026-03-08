@@ -164,10 +164,9 @@ int MHal_RTC_Request_IRQ(irq_handler_t pCallback, void *dev_id)
 
     pm_rtc_irq_pCallback = pCallback;
 
-//CONFIG_MTK_HIFI4DSP_SUPPORT//
-    if (request_irq(E_IRQ_PM_SLEEP, (irq_handler_t)_MHAL_RTCINT_INTHandler, IRQF_TRIGGER_RISING | IRQF_SHARED, "RTC_PM", dev_id))
+    if (request_irq(E_IRQ_PM_SLEEP, (irq_handler_t)_MHAL_RTCINT_INTHandler, IRQF_SHARED, "RTC_PM", dev_id))
     {
-        printk("request_irq fail\n");
+		printk("[%s]request_irq fail\n", __FUNCTION__);
         return -EBUSY;
     }
 
@@ -238,7 +237,8 @@ U32 MHAL_RTC_GetCounter(E_MS_RTC eRtc)
     } while ((val & RTC_READ_EN_BIT) && (cnt < 1000));
 
     u32Reg = MHAL_RTC_Read4Byte(MHAL_RTC_GET_BASE(eRtc)+REG_RTC_CNT);
-    printk(KERN_EMERG "==RTC== %s, %d, time:0x%x, val:0x%x, cnt:%d\n" , __FUNCTION__, __LINE__, u32Reg, val, cnt);
+	if(printk_ratelimit() == TRUE)
+		printk("==RTC== %s, %d, time:0x%x, val:0x%x, cnt:%d\n" , __FUNCTION__, __LINE__, u32Reg, val, cnt);
     return u32Reg;
 }
 
