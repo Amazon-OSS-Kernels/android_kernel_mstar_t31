@@ -1432,7 +1432,7 @@ int do_local_dimming( cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
         }
         MDrv_PWM_ResetEn(LOCAL_DIMMING_PWM_CH,true);
     }
-
+	mdrv_gpio_set_high(PAD_PWM1);
     UBOOT_TRACE("OK\n");
     return 0;
 }
