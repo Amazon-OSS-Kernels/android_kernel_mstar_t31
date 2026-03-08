@@ -756,11 +756,22 @@ static void fixup_hifi4dsp_early_setting(void)
 #ifdef CONFIG_AMAZON_DSP_FRAMEWORK
 static int adfDbgReadFunc(uintptr_t dest, int size)
 {
-    u32 log_buf_start;
+	u32 log_buf_start;
+	int ret;
 
-    spi_read_register(GPR_LOG_BUF_ADDR, &log_buf_start, SPI_SPEED_LOW);
-    dsp_spi_read_ex(log_buf_start, (void*)dest, size, SPI_SPEED_LOW);
-    return size;
+	ret = spi_read_register(GPR_LOG_BUF_ADDR, &log_buf_start, SPI_SPEED_LOW);
+	if (ret != 0) {
+		pr_err("%s failed to read over SPI\n",__func__);
+		return -1;
+	}
+
+	ret = dsp_spi_read_ex(log_buf_start, (void*)dest, size, SPI_SPEED_LOW);
+	if (ret != 0) {
+		pr_err("%s failed to read DSP log over SPI\n",__func__);
+		return -1;
+	}
+
+	return size;
 }
 
 static int adfDbgCheckRunFunc(void)

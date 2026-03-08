@@ -1,15 +1,6 @@
 /*
  * Copyright (c) 2022 Amazon.com, Inc. or its affiliates.  All rights reserved.
  *
- * PROPRIETARY/CONFIDENTIAL.  USE IS SUBJECT TO LICENSE TERMS.
- *
- * sinext_sc1233a.c: sc1233a driver and related sysfs commands implementation
- *
- * Owners: @jodong,@yenvivek
- *
- * MAJOR_VERSION:1
- * MINOR_VERSION:0
- *
  */
 
 #include <linux/kernel.h>
@@ -62,7 +53,7 @@
 #define FIRST_FRAME_LOG_MASK	0x0100
 #define PRINT_REQ_MASK		0x0200
 
-#define MAX_FRAME_BUF_IDX	1 //only last 1 frame for phase 1
+#define MAX_FRAME_BUF_IDX	16 //only last 1 frame for phase 1
 
 #define INC_FRAME_BUF_IDX(n)	{n = (++n >= MAX_FRAME_BUF_IDX) ? 0 : n;} \
 
@@ -84,7 +75,7 @@
 #define SWAP_UINT16(x) (((x) >> 8) | ((x) << 8))
 #define SWAP_UINT32(x) (((x) >> 24) | (((x) & 0x00FF0000) >> 8) | (((x) & 0x0000FF00) << 8) | ((x) << 24))
 
-#define MAJOR_VERSION	1
+#define MAJOR_VERSION	2
 #define MINOR_VERSION	0
 
 enum sc1233a_state {
@@ -155,13 +146,6 @@ enum sc1233a_cli_set_config_mode {
 	CLI_CHIP_BOOT_MODE		= 13,
 	CLI_ALGO_MODE_TEST		= 14,
 	CLI_SET_CONFIG_MODE_MAX
-};
-
-enum sc1233a_log_lv {
-	SC1233A_LOG_ERR,
-	SC1233A_LOG_INFO,
-	SC1233A_LOG_DEBUG,
-	SC1233A_LOG_MAX
 };
 
 //User Settings
@@ -288,9 +272,8 @@ struct sc1233a_event_cnt {
 struct sc1233a_frame_hist {
 	s64 frame_time;
 	u16 status;
-	u32 u32_dist_rx[6];
-	u32 rx1_peak[6];
-	u32 rx2_peak[6];
+	u32 u32_dist_rx[3];
+	u32 rx1_peak[5];
 	u16 interval;
 };
 
@@ -330,9 +313,9 @@ static struct parameter_radar_dynamic radar_para;
 
 int previous_ro_int_cnt = -1;
 
-
-static enum sc1233a_log_lv sc1233a_log_level = SC1233A_LOG_ERR;
-//static enum sc1233a_log_lv sc1233a_log_level = SC1233A_LOG_DEBUG;
+static u8 fan_bins[DIS_DIM] = {DIS_DIM};
+u8 number_of_fan_bins = 0;
+u8 empty_room_detected_with_low_power = 0;
 
 #define SC1233A_ERR(x, args...) if (sc1233a_log_level >= SC1233A_LOG_ERR) \
 		{pr_err("%s: "x, __func__, ##args);} \
@@ -1328,6 +1311,7 @@ static int sc1233a_stop_sensing(struct i2c_client *client, struct sc1233a_data *
 	sc1233a_enable_irq(pdata, pdata->or_gpio, false);
 	del_timer_sync(&or_host_timer);
 	del_timer_sync(&or_watch_timer);
+
 	/* if wq run right after stop, i2c err in wq and then recovery is cause of kernel panic */
 	if (!from_wq) {
 		/* wait pending wq before change settings */
@@ -1445,16 +1429,20 @@ static u8 log10_dB(u32 number)
 	return (u8)(value+i-1);
 }
 
-static void sc1233a_last_frames_log_print(struct sc1233a_data *pdata)
+static void sc1233a_last_frames_log_print(struct sc1233a_data *pdata, int number_of_frames)
 {
 	struct sc1233a_frame_hist *buf = pdata->frame_hist_buf;
 	int idx = pdata->frame_hist_idx;
 	int n, i;
 	bool isFirstFrame = true;
 
-	/* next idx is oldest data */
-	i = NEXT_FRAME_BUF_IDX(idx);
-	for (n = 0; n < MAX_FRAME_BUF_IDX; n++) {
+	/* if print 1 frame, print the most recent */
+	if (number_of_frames == 1){
+	    i = idx;
+	}else{
+	    i = NEXT_FRAME_BUF_IDX(idx);
+	}
+	for (n = 0; n < number_of_frames; n++) {
 		if (BITMASK_READ(buf[i].status, PRINT_REQ_MASK)) {
 			BITMASK_CLEAR(buf[i].status, PRINT_REQ_MASK);
 			if (isFirstFrame) {
@@ -1462,11 +1450,11 @@ static void sc1233a_last_frames_log_print(struct sc1233a_data *pdata)
 			}
 
 /* log format
-<search keyword>:<status>/<frame timestamp>/<frame interval>/<dist_rx1>/<dist_rx2>/<peak_rx1>/<peak_rx2>/<sensor mode>/<i2c err count>
+<search keyword>:<status>/<frame timestamp>/<frame interval>/<dist_rx1>/<peak_rx1>/<sensor mode>/<i2c err count>
 */
 			printk("sc1233a:0x%X/%lums/%d"
-			"/%d,%d,%d,%d,%d/%d,%d,%d,%d,%d"
-			"/%d,%d,%d,%d,%d/%d,%d,%d,%d,%d"
+			"/%d,%d,%d,%d,%d"
+			"/%d,%d,%d,%d,%d"
 			"/%d/%lu\n",
 			buf[i].status,
 			buf[i].frame_time,
@@ -1474,35 +1462,89 @@ static void sc1233a_last_frames_log_print(struct sc1233a_data *pdata)
 			((buf[i].u32_dist_rx[0] & 0xFFFF0000)>>16), (buf[i].u32_dist_rx[0] & 0x0000FFFF),
 			((buf[i].u32_dist_rx[1] & 0xFFFF0000)>>16), (buf[i].u32_dist_rx[1] & 0x0000FFFF),
 			(buf[i].u32_dist_rx[2] & 0x0000FFFF),
-			((buf[i].u32_dist_rx[3] & 0xFFFF0000)>>16), (buf[i].u32_dist_rx[3] & 0x0000FFFF),
-			((buf[i].u32_dist_rx[4] & 0xFFFF0000)>>16), (buf[i].u32_dist_rx[4] & 0x0000FFFF),
-			(buf[i].u32_dist_rx[5] & 0x0000FFFF),
-			buf[i].rx1_peak[1], buf[i].rx1_peak[2], buf[i].rx1_peak[3], buf[i].rx1_peak[4], buf[i].rx1_peak[5],
-			buf[i].rx2_peak[1], buf[i].rx2_peak[2], buf[i].rx2_peak[3], buf[i].rx2_peak[4], buf[i].rx2_peak[5],
+			buf[i].rx1_peak[0], buf[i].rx1_peak[1], buf[i].rx1_peak[2], buf[i].rx1_peak[3], buf[i].rx1_peak[4],
 			pdata->mode, (long unsigned int)sc1233a_cnt.i2c_err_cnt);
 
 			isFirstFrame = false;
 		}
 		INC_FRAME_BUF_IDX(i);
 	}
+	/* Done printing frames. Now, we print fan bins related PCAM logs */
+	printk("sc1233a:PCAM:[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]",
+		handle_app.rx1_distance_histogram_10fps_previous[0],
+		handle_app.rx1_distance_histogram_10fps_previous[1],
+		handle_app.rx1_distance_histogram_10fps_previous[2],
+		handle_app.rx1_distance_histogram_10fps_previous[3],
+		handle_app.rx1_distance_histogram_10fps_previous[4],
+		handle_app.rx1_distance_histogram_10fps_previous[5],
+		handle_app.rx1_distance_histogram_10fps_previous[6],
+		handle_app.rx1_distance_histogram_10fps_previous[7],
+		handle_app.rx1_distance_histogram_10fps_previous[8],
+		handle_app.rx1_distance_histogram_10fps_previous[9],
+		handle_app.rx1_distance_histogram_10fps_previous[10],
+		handle_app.rx1_distance_histogram_10fps_previous[11],
+		handle_app.rx1_distance_histogram_10fps_previous[12],
+		handle_app.rx1_distance_histogram_10fps_previous[13],
+		handle_app.rx1_distance_histogram_10fps_previous[14],
+		handle_app.rx1_distance_histogram_10fps_previous[15],
+		handle_app.rx1_distance_histogram_10fps_previous[16],
+		handle_app.rx1_distance_histogram_10fps_previous[17],
+		handle_app.rx1_distance_histogram_10fps_previous[18],
+		handle_app.rx1_distance_histogram_10fps_previous[19],
+		handle_app.rx1_distance_histogram_10fps_previous[20],
+		handle_app.rx1_distance_histogram_10fps_previous[21],
+		handle_app.rx1_distance_histogram_10fps_previous[22],
+		handle_app.rx1_distance_histogram_10fps_previous[23],
+		handle_app.rx1_distance_histogram_10fps_previous[24],
+		handle_app.rx1_distance_histogram_10fps_previous[25],
+		handle_app.rx1_distance_histogram_10fps_previous[26]);
+	printk("sc1233a:LP_PCAM:[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]",
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[0],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[1],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[2],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[3],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[4],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[5],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[6],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[7],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[8],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[9],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[10],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[11],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[12],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[13],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[14],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[15],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[16],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[17],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[18],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[19],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[20],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[21],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[22],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[23],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[24],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[25],
+		handle_app.rx1_distance_histogram_lowpower_10fps_previous[26]);
 }
 
 static int sc1233a_start_fifo_read(struct i2c_client *client, struct sc1233a_data *pdata, enum sc1233a_sensing_mode mode)
 {
 	u32 data;
 	u8 u8_dummy[16];
-	u32 rx1_distance1, rx2_distance1, rx_distance;
+	u32 rx1_distance1;
+	u32 rx1_distances[MAX_NUMBER_OF_TARGETS];
+	u8 rx1_qualified_peaks=0;
+	u8 threshold;
 	int ret;
 	int i;
 	int gpio_val;
 	u8 prev_detection;
+	u8 logs_printed = 0;
 
-	u32 u32_dist_rx[6], u32_peak_lv_rx1[5], u32_peak_lv_rx2[5];
-	u8 rx1_peak[6], rx2_peak[6], rx_peak;
+	u32 u32_dist_rx[3], u32_peak_lv_rx1[MAX_NUMBER_OF_TARGETS];
+	u8 rx1_peak[MAX_NUMBER_OF_TARGETS];
 
-	//SC1233A_DEBUG("enter\n", __func__ );
-
-	/* status clear by default value */
 	pdata->frame_hist_buf[pdata->frame_hist_idx].status = PRINT_REQ_MASK;
 	pdata->frame_hist_buf[pdata->frame_hist_idx].frame_time = ktime_get_boottime_to_ms();
 
@@ -1543,17 +1585,12 @@ static int sc1233a_start_fifo_read(struct i2c_client *client, struct sc1233a_dat
 			goto error;
 
 		/* read MS_REG_ADDR_DIST_RD_RX1_12 to MS_REG_ADDR_PEAKLVL_RD_RX2_5 */
-		ret = sc1233a_i2c_read_u32_bulk(pdata->client, MS_REG_ADDR_DIST_RD_RX1_12, u32_dist_rx, 6*4);
+		ret = sc1233a_i2c_read_u32_bulk(pdata->client, MS_REG_ADDR_DIST_RD_RX1_12, u32_dist_rx, 3*4);
 		if (ret < 0)
 			goto error;
 
 		/* read MS_REG_ADDR_PEAKLVL_RD_RX1_1 to MS_REG_ADDR_PEAKLVL_RD_RX1_5 */
 		ret = sc1233a_i2c_read_u32_bulk(pdata->client, MS_REG_ADDR_PEAKLVL_RD_RX1_1, u32_peak_lv_rx1, 5*4);
-		if (ret < 0)
-			goto error;
-
-		/* read MS_REG_ADDR_PEAKLVL_RD_RX2_1 to MS_REG_ADDR_PEAKLVL_RD_RX2_5 */
-		ret = sc1233a_i2c_read_u32_bulk(pdata->client, MS_REG_ADDR_PEAKLVL_RD_RX2_1, u32_peak_lv_rx2, 5*4);
 		if (ret < 0)
 			goto error;
 
@@ -1569,24 +1606,31 @@ static int sc1233a_start_fifo_read(struct i2c_client *client, struct sc1233a_dat
 		//USLEEP_UNDER_20MS(1000); /* end of function already have enough delay */
 
 		rx1_distance1 = (u32_dist_rx[0] & 0xFFFF0000) >> 16; /* MS_REG_ADDR_DIST_RD_RX1_12 */
-		rx2_distance1 = (u32_dist_rx[3] & 0xFFFF0000) >> 16; /* MS_REG_ADDR_DIST_RD_RX2_12 */
+		
+		rx1_distances[0] = rx1_distance1;
+		rx1_distances[1] = (u32_dist_rx[0] & 0x0000FFFF);
+		rx1_distances[2] = ((u32_dist_rx[1] & 0xFFFF0000)>>16);
+		rx1_distances[3] = (u32_dist_rx[1] & 0x0000FFFF);
+		rx1_distances[4] = (u32_dist_rx[2] & 0x0000FFFF);
 
-		rx1_peak[1] = log10_dB(u32_peak_lv_rx1[0]); /* MS_REG_ADDR_PEAKLVL_RD_RX1_1 */
-		rx1_peak[2] = log10_dB(u32_peak_lv_rx1[1]);
-		rx1_peak[3] = log10_dB(u32_peak_lv_rx1[2]);
-		rx1_peak[4] = log10_dB(u32_peak_lv_rx1[3]);
-		rx1_peak[5] = log10_dB(u32_peak_lv_rx1[4]); /* MS_REG_ADDR_PEAKLVL_RD_RX1_5 */
 
-		rx2_peak[1] = log10_dB(u32_peak_lv_rx2[0]); /* MS_REG_ADDR_PEAKLVL_RD_RX2_1 */
-		rx2_peak[2] = log10_dB(u32_peak_lv_rx2[1]);
-		rx2_peak[3] = log10_dB(u32_peak_lv_rx2[2]);
-		rx2_peak[4] = log10_dB(u32_peak_lv_rx2[3]);
-		rx2_peak[5] = log10_dB(u32_peak_lv_rx2[4]); /* MS_REG_ADDR_PEAKLVL_RD_RX2_5 */
+		rx1_peak[0] = log10_dB(u32_peak_lv_rx1[0]); /* MS_REG_ADDR_PEAKLVL_RD_RX1_1 */
+		rx1_peak[1] = log10_dB(u32_peak_lv_rx1[1]);
+		rx1_peak[2] = log10_dB(u32_peak_lv_rx1[2]);
+		rx1_peak[3] = log10_dB(u32_peak_lv_rx1[3]);
+		rx1_peak[4] = log10_dB(u32_peak_lv_rx1[4]); /* MS_REG_ADDR_PEAKLVL_RD_RX1_5 */
+		
+		for(i=0;i<MAX_NUMBER_OF_TARGETS;i++)
+		{
+		    if(rx1_peak[i] < app_para.presence_threshold || rx1_peak[i]==INVALID_RX_PEAK)
+		        break;
+		    rx1_qualified_peaks += 1;
+		}
 
-		for (i = 0; i < 6; i++ ) {
-			pdata->frame_hist_buf[pdata->frame_hist_idx].u32_dist_rx[i] = u32_dist_rx[i];
+		for (i = 0; i < MAX_NUMBER_OF_TARGETS; i++ ) {
+			if (i < 3)
+				pdata->frame_hist_buf[pdata->frame_hist_idx].u32_dist_rx[i] = u32_dist_rx[i];
 			pdata->frame_hist_buf[pdata->frame_hist_idx].rx1_peak[i] = rx1_peak[i];
-			pdata->frame_hist_buf[pdata->frame_hist_idx].rx2_peak[i] = rx2_peak[i];
 		}
 
 		/* Done reading distance and peak registers. Now run algorithm.*/
@@ -1594,17 +1638,9 @@ static int sc1233a_start_fifo_read(struct i2c_client *client, struct sc1233a_dat
 			pdata->mode == TIMER_DIS_LOW_MODE ||
 			pdata->mode == TIMER_DIS_MID_MODE ||
 			pdata->mode == TIMER_DIS_HIGH_MODE) {
-			rx_peak = (rx1_peak[1] > rx2_peak[1]) ? rx1_peak[1] : rx2_peak[1];
-
-			if (rx_peak != INVALID_RX_PEAK) {
-
-				if (rx1_peak[1] == rx2_peak[1]){
-					rx_distance = (rx1_distance1 > rx2_distance1) ? rx1_distance1 : rx2_distance1;
-				} else {
-					rx_distance = (rx_peak == rx1_peak[1]) ? rx1_distance1 : rx2_distance1;
-				}
+			if (rx1_peak[0] != INVALID_RX_PEAK) {
 				prev_detection = handle_app.status;
-				presence_detection(&handle_app, &app_para, &radar_para, rx_peak, rx_distance);
+				presence_detection(&handle_app, &app_para, &radar_para, rx1_peak[0], rx1_distance1, rx1_distances, rx1_peak, rx1_qualified_peaks);
 				if (handle_app.status) {
 					INC_U32_CNT(sc1233a_cnt.presence_cnt);
 				}
@@ -1612,19 +1648,30 @@ static int sc1233a_start_fifo_read(struct i2c_client *client, struct sc1233a_dat
 
 				/* status update and print last frames log */
 				pdata->frame_hist_buf[pdata->frame_hist_idx].interval = radar_para.interval;
-				if (handle_app.rate_change_flag) {
-					BITMASK_SET(pdata->frame_hist_buf[pdata->frame_hist_idx].status, RATE_CHANGE_MASK);
+				if (sc1233a_log_level == SC1233A_LOG_ERR)
+				{ 				
+					if (handle_app.rate_change_flag) {
+						BITMASK_SET(pdata->frame_hist_buf[pdata->frame_hist_idx].status, RATE_CHANGE_MASK);
+					}
+					if (handle_app.status) {
+						BITMASK_SET(pdata->frame_hist_buf[pdata->frame_hist_idx].status, PRE_STATUS_MASK);
+					}
+					if (prev_detection != handle_app.status) {
+						BITMASK_SET(pdata->frame_hist_buf[pdata->frame_hist_idx].status, PRE_DET_CHANGE_MASK);
+					}
+					if (prev_detection != handle_app.status){
+					    if (handle_app.status){
+					        sc1233a_last_frames_log_print(pdata, 16);
+					    }
+					    else{
+					        sc1233a_last_frames_log_print(pdata, 1);
+					    }
+					    logs_printed = 1;
+					}
+					if (handle_app.rate_change_flag && !logs_printed){
+					    sc1233a_last_frames_log_print(pdata, 1);
+					}
 				}
-				if (handle_app.status) {
-					BITMASK_SET(pdata->frame_hist_buf[pdata->frame_hist_idx].status, PRE_STATUS_MASK);
-				}
-				if (prev_detection != handle_app.status) {
-					BITMASK_SET(pdata->frame_hist_buf[pdata->frame_hist_idx].status, PRE_DET_CHANGE_MASK);
-				}
-				if ((prev_detection != handle_app.status) || handle_app.rate_change_flag) {
-					sc1233a_last_frames_log_print(pdata);
-				}
-
 				if (handle_app.rate_change_flag) {
 					/*Stop sensing*/
 					SC1233A_DEBUG("Started rate change \n");
@@ -1650,26 +1697,22 @@ static int sc1233a_start_fifo_read(struct i2c_client *client, struct sc1233a_dat
 		}
 
 /* remove per frame log */
-#if 0
+//#ifdef DEBUG_LOGS
 		/* avoid duplicate log print */
-		if (sc1233a_log_level == SC1233A_LOG_ERR) {
-			printk("sc1233a:Dist;PkLvl;PrSt="
-			"[%03d,%03d,%03d,%03d,%03d][%03d,%03d,%03d,%03d,%03d];"
-			"[%02d,%02d,%02d,%02d,%02d][%02d,%02d,%02d,%02d,%02d];"
-			"%01d\n",
+		if (sc1233a_log_level == SC1233A_LOG_INFO) {
+			printk("sc1233a:Dist;PkLvl;PrSt;FI;Rate;Th;QP;FC;Score;PowerScore;FanbinCount="
+			"[%03d,%03d,%03d,%03d,%03d];"
+			"[%02d,%02d,%02d,%02d,%02d];"
+			"%01d,%d,%d,%d,%d,%d,%d,%d,%d\n",
 			((u32_dist_rx[0] & 0xFFFF0000)>>16), (u32_dist_rx[0] & 0x0000FFFF),
 			((u32_dist_rx[1] & 0xFFFF0000)>>16), (u32_dist_rx[1] & 0x0000FFFF),
 			(u32_dist_rx[2] & 0x0000FFFF),
-			((u32_dist_rx[3] & 0xFFFF0000)>>16), (u32_dist_rx[3] & 0x0000FFFF),
-			((u32_dist_rx[4] & 0xFFFF0000)>>16), (u32_dist_rx[4] & 0x0000FFFF),
-			(u32_dist_rx[5] & 0x0000FFFF),
-			rx1_peak[1], rx1_peak[2], rx1_peak[3], rx1_peak[4], rx1_peak[5],
-			rx2_peak[1], rx2_peak[2], rx2_peak[3], rx2_peak[4], rx2_peak[5],
-			handle_app.status);
+			rx1_peak[0], rx1_peak[1], rx1_peak[2], rx1_peak[3], rx1_peak[4],
+			handle_app.status,handle_app.frame_index,radar_para.interval,app_para.presence_threshold,rx1_qualified_peaks,handle_app.frame_counter,handle_app.counter_score, handle_app.power_score, handle_app.number_of_fan_bins);
 		}
-#endif
+//#endif
 	}
-	MSLEEP_INTERRUPTIBLE(10);
+	//MSLEEP_INTERRUPTIBLE(10);
 
 	INC_FRAME_BUF_IDX(pdata->frame_hist_idx);
 	//SC1233A_DEBUG("ok\n");
@@ -2355,7 +2398,7 @@ error:
 static int sc1233a_attempt_recovery(struct sc1233a_data *pdata)
 {
 	int ret;
-	int i;
+	int i,j;
 	u8 resume;
 	u8 beta = 0;
 	u16 interval = 0;
@@ -2410,10 +2453,16 @@ static int sc1233a_attempt_recovery(struct sc1233a_data *pdata)
 		if (handle_app.initialized == 1){
 			interval = radar_para.interval;
 			beta = radar_para.beta;      // Trade-off in ingress detection latency, if the person leaves while attempting to recover the radar.
+			number_of_fan_bins = handle_app.number_of_fan_bins;
+		        for(j=0;j<DIS_DIM;j++)
+		        {
+		            fan_bins[j] = handle_app.fan_bins[j];
+		        }
+			empty_room_detected_with_low_power = handle_app.empty_room_fan_detected_with_low_power;
 		}
 		else{
 		/* step 3: Initialize Algo parameters*/
-			presence_init(&handle_app);
+			presence_init(&handle_app, fan_bins, number_of_fan_bins,empty_room_detected_with_low_power);
 			parameter_app_update(&app_para, 10);
 			parameter_radar_dynamic_update(&radar_para, 100);
 			interval = 100;
@@ -2976,7 +3025,7 @@ static ssize_t sc1233a_cli_sensor_set_config_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t size)
 {
 	struct sc1233a_data *pdata = dev_get_drvdata(dev);
-	int ret;
+	int ret,j;
 	enum sc1233a_cli_set_config_mode cli_mode;
 	u8 resume;
 	u8 beta = 0;
@@ -3044,7 +3093,16 @@ static ssize_t sc1233a_cli_sensor_set_config_store(struct device *dev,
 			goto error;
 
 		/* step 3: Initialize Algo parameters*/
-		presence_init(&handle_app);
+		if (handle_app.initialized == 1)
+		{
+		    number_of_fan_bins = handle_app.number_of_fan_bins;
+		    for(j=0;j<DIS_DIM;j++)
+		    {
+		        fan_bins[j] = handle_app.fan_bins[j];
+		    }
+		    empty_room_detected_with_low_power = handle_app.empty_room_fan_detected_with_low_power;
+		}
+		presence_init(&handle_app, fan_bins, number_of_fan_bins, empty_room_detected_with_low_power);
 		parameter_app_update(&app_para, 10);
 		parameter_radar_dynamic_update(&radar_para, 100);
 
@@ -3683,7 +3741,7 @@ static ssize_t sc1233a_hal_distance_set_mode_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t size)
 {
 	struct sc1233a_data *pdata = dev_get_drvdata(dev);
-	int ret;
+	int ret,j;
 	u32 distance_mode_val;
 	u8 resume;
 	u8 beta = 0;
@@ -3753,7 +3811,17 @@ static ssize_t sc1233a_hal_distance_set_mode_store(struct device *dev,
 			goto error;
 
 		/* step 3: Initialize Algo parameters*/
-		presence_init(&handle_app);
+		if (handle_app.initialized == 1)
+		{
+		    number_of_fan_bins = handle_app.number_of_fan_bins;
+		    for(j=0;j<DIS_DIM;j++)
+		    {
+		        fan_bins[j] = handle_app.fan_bins[j];
+		    }
+		    empty_room_detected_with_low_power = handle_app.empty_room_fan_detected_with_low_power;
+		    
+		}
+		presence_init(&handle_app, fan_bins, number_of_fan_bins, empty_room_detected_with_low_power);
 		parameter_app_update(&app_para, 10);
 		parameter_radar_dynamic_update(&radar_para, 100);
 
