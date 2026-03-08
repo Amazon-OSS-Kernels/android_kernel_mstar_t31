@@ -7,6 +7,7 @@
 - [Amazon Fire TV Smart TV   OK 4K UHD](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/ok_4k_uhd/ok_uhd_firetv_2021-7.2.8.4-20220613)
 - [Amazon Fire TV Smart TV   Panasonic MX800 UHD TV](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/panasonic_mx800_uhd_tv/panasonic_mx800_uhd_firetv_2023-7.6.5.9-20230829)
 - [Amazon Fire TV Smart TV   Polaroid 4K UHD Fire TV](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/polaroid_4k_uhd_fire_tv/jvc_uhd_firetv_2021-7.6.4.6-20230601)
+- [Amazon Fire TV Smart TV   TCL QLED Fire TV](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/tcl_qled_fire_tv/ok_uhd_firetv_2021-7.2.8.4-20220613)
 - [Amazon Fire TV Smart TV   Toshiba 4K UHD (2021 Release)](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/toshiba_4k_uhd_2021_release/amazonfiretvedition_4k_uhd-7.6.2.4-20230215)
 - [Amazon Fire TV Smart TV   Toshiba and Insignia 4K](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/toshiba_and_insignia_4k/amazonfiretvedition_4k_uhd-7.6.2.4-20230216)
 - [Amazon Fire TV Smart TV   Toshiba Class M550 Series LED 4K UHD](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/toshiba_class_m550_series_led_4k_uhd/amazonfiretvedition_4k_uhd-7.6.4.6-20230601)
