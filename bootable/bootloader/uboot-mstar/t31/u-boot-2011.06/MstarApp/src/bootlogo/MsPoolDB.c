@@ -242,6 +242,11 @@ static char gIniBootLogo[BUFFER_SIZE];
 static bool bOdmModeEnable = 0;
 static bool bTcon_PMIC_Enable = FALSE;
 static bool bTcon_Pgamma_Enable = FALSE;
+#if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_SHELLY)
+static bool bPnl_SSC_Enable = FALSE;
+static U16  u16Pnl_SSC_Span = 0;
+static U16  u16Pnl_SSC_Step = 0;
+#endif
 //-------------------------------------------------------------------------------------------------
 //  Extern Functions
 //-------------------------------------------------------------------------------------------------
@@ -3573,12 +3578,24 @@ int parse_pnl_ini(char *path,PanelType *p_data)
     n = Profile_GetInteger("panel", "m_dwPanelMinDCLK", 0);
     UBOOT_DEBUG("m_dwPanelMinDCLK = %ld \n",n);
     p_data->m_dwPanelMinDCLK = n;
-    n = Profile_GetInteger("panel", "m_wSpreadSpectrumStep", 0);
-    UBOOT_DEBUG("m_wSpreadSpectrumStep = %ld \n",n);
-    p_data->m_wSpreadSpectrumStep = n;
-    n = Profile_GetInteger("panel", "m_wSpreadSpectrumSpan", 0);
-    UBOOT_DEBUG("m_wSpreadSpectrumSpan = %ld \n",n);
-    p_data->m_wSpreadSpectrumSpan = n;
+#if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_SHELLY)
+    n = Profile_GetInteger("panel", "m_bSpreadSpectrumEnable", 0);
+    UBOOT_DEBUG("m_bSpreadSpectrumEnable = %ld \n",n);
+    bPnl_SSC_Enable = (bool)n;
+#endif
+   n = Profile_GetInteger("panel", "m_wSpreadSpectrumStep", 0);
+   UBOOT_DEBUG("m_wSpreadSpectrumStep = %ld \n",n);
+   p_data->m_wSpreadSpectrumStep = n;
+#if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_SHELLY)
+   u16Pnl_SSC_Step = n;
+#endif
+   n = Profile_GetInteger("panel", "m_wSpreadSpectrumSpan", 0);
+   UBOOT_DEBUG("m_wSpreadSpectrumSpan = %ld \n",n);
+   p_data->m_wSpreadSpectrumSpan = n;
+#if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_SHELLY)
+   u16Pnl_SSC_Span = n;
+#endif
+
     n = Profile_GetInteger("panel", "m_ucDimmingCtl", 0);
     UBOOT_DEBUG("m_ucDimmingCtl = %ld \n",n);
     p_data->m_ucDimmingCtl = n;
@@ -3855,6 +3872,9 @@ int Load_PanelSetting_ToFlash(U32 u32DbtableOffset)
 #if defined(CONFIG_DATA_SEPARATION)
     char * pEnv=NULL;
 #endif
+#if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_SHELLY)
+    char str[BUFFER_SIZE];
+#endif
     UBOOT_TRACE("IN\n");
     memset(&pnl,0,sizeof(pnl));
 #if defined(CONFIG_DATA_SEPARATION)
@@ -3889,7 +3909,24 @@ int Load_PanelSetting_ToFlash(U32 u32DbtableOffset)
         UBOOT_ERROR("parse_pnl_ini fail !!\n");
         return ret;
     }
-
+#if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_SHELLY)
+    snprintf(str, sizeof(str), "%u", bPnl_SSC_Enable);
+    setenv("panel_ssc_enable", str);
+    UBOOT_INFO("panel_ssc_enable = %u (from panel_*.ini)\n", bPnl_SSC_Enable);
+    if((bPnl_SSC_Enable == TRUE)&&(u16Pnl_SSC_Span > 0)&&(u16Pnl_SSC_Step > 0))
+    {
+        snprintf(str, sizeof(str), "%x", u16Pnl_SSC_Span);
+        setenv("panel_ssc_span", str);
+        UBOOT_INFO("panel_ssc_span = 0x%x (from panel_*.ini)\n", u16Pnl_SSC_Span);
+        snprintf(str, sizeof(str), "%x", u16Pnl_SSC_Step);
+        setenv("panel_ssc_step", str);
+        UBOOT_INFO("panel_ssc_step = 0x%x (from panel_*.ini)\n", u16Pnl_SSC_Step);
+    }
+    else
+    {
+        UBOOT_INFO("panel ssc not enable or ssc span or ssc step value = 0\n");
+    }
+#endif
     UBOOT_DEBUG("panel para size =: 0x%08x \n",sizeof(pnl));
     ret = Load_DataToDbBuffer(u32DbtableOffset, E_DB_PANEL_PARA, (U32)&pnl);
 
