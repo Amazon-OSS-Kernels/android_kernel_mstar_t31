@@ -1241,7 +1241,7 @@
 		bl_ctrl_hailey = <120>;
 		bl_ctrl_haileyplus = <120>;
 		bl_ctrl_inverse = <0>;
-		bl_ctrl_inverse_corleone = <1>;
+		bl_ctrl_inverse_abc123 = <1>;
 		vcc_gpio = <44>;
 		vcc_gpio_invert = <0>;
 		led_gpio = <4>;
@@ -1679,7 +1679,7 @@
 	mt8570_ipi {
 		compatible = "mediatek,mt8570_ipi";
 		status = "okay";
-        interrupts = <33>; /*E_IRQ_PM_SLEEP*/
+		ipi_irq_gpio = <10>;
 	};
 
 	hifi4dsp-load {
@@ -1705,7 +1705,10 @@
 
     hifi4dsp_wdt {
         compatible = "mediatek,hifi4dsp-wdt";
-		interrupts = <33>;
+		dsp-wdt-gpio = <7>;
+		dsp-wdt-inverse = <0>;
+		dsp-wdt-inverse_abc123 = <1>;
+		dsp-wdt-inverse_abc123eu = <1>;
     };
 
 };
