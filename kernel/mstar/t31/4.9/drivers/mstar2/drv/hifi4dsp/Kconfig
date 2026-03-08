@@ -25,3 +25,11 @@ config MTK_HIFI4DSP_WDT_RECOVER_SUPPORT
 	  Say yes here to enable DSP WDT recovery.
 	  It depends on MTK_HIFI4DSP_SUPPORT.
 	  If unsure, say N.
+
+config AMAZON_DSP_IPC_AGENT
+	bool "AMAZON HIFI4DSP IPC Agent Support"
+	depends on MTK_HIFI4DSP_SUPPORT
+	---help---
+	  Say yes here to enable Amazon DSP Agent.
+	  It depends on MTK_HIFI4DSP_SUPPORT.
+	  If unsure, say N.
