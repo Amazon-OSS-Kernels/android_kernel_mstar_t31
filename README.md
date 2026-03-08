@@ -22,3 +22,4 @@
 - [Fire TV 4 Series](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/4-series/fire_tv_4_series-7.6.3.0-20230405)
 - [Fire TV Omni QLED Series 43", 50", 55"](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/omni_qled_series_43_50_55/fire_tv_omni_qled_series-7.6.3.0-20230405)
 - [Fire TV Omni QLED Series 65", 75"](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/omni_qled_series_65_75/firetvomni_qled_4k_uhd-7.6.0.5-20230315)
+- [Fire TV Omni Series](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/omni_series/firetvomniseries_4k_uhd-7.6.2.4-20230320)
