@@ -20,6 +20,6 @@ KERNEL_IMAGES="arch/arm64/boot/Image:arch/arm64/boot/Image.gz"
 
 ################################################################################
 # NOTE: You must fill in the following with the path to a copy of an
-#       linaro-4.9.3-2014.11-arm-linux-gnueabihf compiler
+#       linaro-4.9.3-2014.11-arm-linux-gnueabihf compier
 ################################################################################
 CROSS_COMPILER_PATH=""

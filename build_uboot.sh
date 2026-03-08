@@ -112,13 +112,12 @@ function exec_build_uboot {
     cp -f ${CONFIG_FILE} ./mk_config
     ./mk mtk_t31
 
-    local IFS=":"
-    for IMAGE in ${UBOOT_IMAGES};do
-        if [ ! -f "${IMAGE}" ]; then
-            echo "ERROR: Failed to build Uboot." >&2
-            exit 1
-        fi
-    done
+    if [[ $? -ne 0 ]]
+    then
+        echo "Build failed"
+        exit 10
+    fi
+
     popd
 }
 
