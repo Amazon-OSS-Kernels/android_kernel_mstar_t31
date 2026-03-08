@@ -199,7 +199,8 @@ MS_BOOL MsDemura_LoadBin(DeMuraBinHeader *pHdr, MS_U8 *mmap_buf, MS_U8 *unzip_bu
         }
     }
 
-#ifndef CONFIG_DEMURA_LGD_DEMO
+//#ifndef CONFIG_DEMURA_LGD_DEMO
+#if(!CONFIG_DEMURA_WITHOUT_MMC_PART)
     bRet = read_raw_data(buf, 0, u32fileSize);
     if (bRet != TRUE)
     {
@@ -209,8 +210,9 @@ MS_BOOL MsDemura_LoadBin(DeMuraBinHeader *pHdr, MS_U8 *mmap_buf, MS_U8 *unzip_bu
 #endif
     if (MDrv_DEMURA_Check_AllBinCRC(buf) == FALSE)
     {
-        UBOOT_ERROR("Calculate All Demura Bin CRC fail\n");
-        return FALSE;
+        //UBOOT_ERROR("Calculate All Demura Bin CRC fail\n");
+        UBOOT_ERROR("Calculate All Demura Bin CRC fail, not return FALSE\n");
+        //return FALSE;
     }
 
     // Try to avoid unnecssary memcpy.
@@ -237,6 +239,11 @@ static MS_U32 Convert_and_Reload(DeMuraBinHeader *pHdr, PanelType* panel_data)
         UBOOT_ERROR("Convert %s to Mstar Demura Failed!\n", CONFIG_DEMURA_VENDOR_STRING);
         return 0x00;
     }
+
+#if(CONFIG_DEMURA_WITHOUT_MMC_PART)
+    UBOOT_INFO("Convert %s to Mstar Demura Success!\n", CONFIG_DEMURA_VENDOR_STRING);
+    memcpy(pHdr, bin_info.bin_buf, sizeof(DeMuraBinHeader));  // Copy Demura Header;
+#else
     if (write_raw_data(bin_info.bin_buf, 0, bin_info.bin_size) != TRUE)
     {
         UBOOT_ERROR("write_raw_data to Demura(Partition) Failed\n");
@@ -249,12 +256,24 @@ static MS_U32 Convert_and_Reload(DeMuraBinHeader *pHdr, PanelType* panel_data)
         UBOOT_ERROR("MsDemura_LoadHeader Error Again!\n");
         return 0x00;
     }
+#endif
+
     if (Alloc_Load_Buf(pHdr, &bin_buf, &tbuf_addr, 0) != TRUE)
     {
         UBOOT_ERROR("Alloc_Load_Buf Error!\n");
         return 0x00;
     }
 
+#if(CONFIG_DEMURA_WITHOUT_MMC_PART)
+    if (pHdr->u8LayerDataFomrat == E_DEMURA_COMPRESS_FORMAT)
+    {
+        memcpy(tbuf_addr, bin_info.bin_buf, bin_info.bin_size);
+    }
+    else
+    {
+        memcpy(bin_buf,   bin_info.bin_buf, bin_info.bin_size);
+    }
+#endif
     if (MsDemura_LoadBin(pHdr, bin_buf, tbuf_addr) != TRUE)
     {
         UBOOT_ERROR("MsDemura_LoadBin Error Again!\n");
@@ -290,11 +309,17 @@ static MS_U32 MsDemura_AC_Init(DeMuraBinHeader *pHdr, PanelType* panel_data)
         return 0x00;
     }
 
+#if(CONFIG_DEMURA_WITHOUT_MMC_PART)
+    UBOOT_DEBUG("CONFIG_DEMURA_WITHOUT_MMC_PART, do demura convert! \n");
+    return Convert_and_Reload(pHdr, panel_data);
+#else
     if (MsDemura_LoadHeader(pHdr, panel_data) != TRUE)
     {
         UBOOT_ERROR("MsDemura_LoadHeader Error\n");
         return Convert_and_Reload(pHdr, panel_data);
     }
+#endif    
+
     if (Alloc_Load_Buf(pHdr, &bin_buf, &tbuf_addr, 0) != TRUE)
     {
         UBOOT_ERROR("Alloc_Load_Buf Error!\n");
@@ -328,6 +353,18 @@ static MS_U32 LGDemo_Convert_And_Load(MS_BOOL bFCIC, MS_U32 id_num)
         UBOOT_ERROR("Convert FCIC(%s) to Mstar-Demura Failed!\n", (bFCIC == TRUE ? "FCIC" : "simple-FCIC"));
         return 0x00;
     }
+
+ #if(CONFIG_DEMURA_WITHOUT_MMC_PART)
+    UBOOT_INFO("Convert %s to Mstar Demura Success!\n", CONFIG_DEMURA_VENDOR_STRING);
+#else
+    if (write_raw_data(bin_info.bin_buf, 0, bin_info.bin_size) != TRUE)
+    {
+        UBOOT_ERROR("write_raw_data to Demura(Partition) Failed\n");
+        return FALSE;
+    }
+    UBOOT_INFO("Convert %s to Mstar Demura Success!\n", CONFIG_DEMURA_VENDOR_STRING);
+#endif
+
     memcpy(&Hdr, bin_info.bin_buf, sizeof(Hdr));  // Copy Demura Header;
 
     if (Alloc_Load_Buf(&Hdr, &bin_buf, &tbuf_addr, id_num)!= TRUE)
@@ -377,6 +414,12 @@ MS_U32 MsDemura_Demo_AC_Init(DeMuraBinHeader *pHdr, PanelType* panel_data)
         UBOOT_ERROR("init_demura_heap failed!\n");
         return 0x00;
     }
+
+#if(CONFIG_DEMURA_WITHOUT_MMC_PART)
+    ret = FALSE;
+#else
+    ret = MsDemura_LoadHeader(pHdr, panel_data);
+#endif
 
     bin_buf = LGDemo_Convert_And_Load(TRUE, SumString("Full-FCIC"));
     if (bin_buf == 0)

@@ -244,17 +244,23 @@ MS_BOOL MApi_Demura_Init(PanelType* panel_data)
 
     if (get_addr_from_mmap(DEMURA_MMAP_ID, &phy_addr) == -1)
     {
-        UBOOT_ERROR("get addr from %s mmap fail\n",DEMURA_MMAP_ID);
-        UBOOT_TRACE("OK\n");
-        return FALSE;
+        if (get_addr_from_mmap(DEMURA_MMAP_ID_MI, &phy_addr) == -1)
+        {
+            UBOOT_ERROR("get addr from %s mmap fail\n",DEMURA_MMAP_ID);
+            UBOOT_TRACE("OK\n");
+            return FALSE;
+        }
     }
     if (get_length_from_mmap(DEMURA_MMAP_ID, (U32 *)&buf_phy_len) == -1)
     {
-        UBOOT_ERROR("get length from %s mmap fail\n",DEMURA_MMAP_ID);
-        UBOOT_TRACE("OK\n");
-        return FALSE;
+        if (get_length_from_mmap(DEMURA_MMAP_ID_MI, (U32 *)&buf_phy_len) == -1)
+        {
+            UBOOT_ERROR("get length from %s mmap fail\n",DEMURA_MMAP_ID);
+            UBOOT_TRACE("OK\n");
+            return FALSE;
+        }
     }
-
+ 
     init_dbuf_desc(PA2BA(phy_addr), buf_phy_len);
 
     // Using api(push_demura_bin) to get load buffer

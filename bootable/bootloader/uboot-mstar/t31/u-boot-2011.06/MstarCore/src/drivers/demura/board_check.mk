@@ -22,6 +22,9 @@ else ifeq ($(CONFIG_MSTAR_MAZDA),y)
 else ifeq ($(CONFIG_MSTAR_MASERATI),y)
     URSA_TYPE	:= 11
     FCIC_IP		:= false
+else ifeq ($(CONFIG_MSTAR_M7632),y)
+    URSA_TYPE   := 7632
+    FCIC_IP     := false
 else
     URSA_TYPE	:= invalid_num
     FCIC_IP		:= false

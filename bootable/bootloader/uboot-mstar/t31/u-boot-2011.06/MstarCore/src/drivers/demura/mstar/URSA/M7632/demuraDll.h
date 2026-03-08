@@ -51,23 +51,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *****************************************************************************/
+#ifndef _DEMURA_DLL_H_
+#define _DEMURA_DLL_H_
 
-#ifndef _MS_API_MSPI_
-#define _MS_API_MSPI_
+MS_U32 StrToHex(const char *psHex, int startIndex);
+MS_BOOL mstar_demura_interface (interface_info *Info1,  BinOutputInfo *bin_info);
 
-#include <MsTypes.h>
-
-#if (ENABLE_CMD_SF == 1)
-int MDrv_MSPI_CFG_PIN(int port_num);
-
-#if defined(CONFIG_MSPI_CS_GPIO)
-void MDrv_MSPI_CFG_CS(MS_BOOL Enable);
-#endif
-#endif
-
-void MDrv_MSPI_DEMURA_CS_OUT(int Enable);
-
-int do_dolby_init(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[]);
+int get_demura_bin_size(void);
 
 #endif
-

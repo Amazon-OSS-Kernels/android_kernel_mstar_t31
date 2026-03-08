@@ -358,13 +358,23 @@ struct spi_flash *spi_flash_probe(unsigned int bus, unsigned int cs,
 				break;
 		}
 
-	if (!flash) {
-		printf("SF: Unsupported manufacturer %02x\n", *idp);
-		printf("idcodes : ");
-		print_buffer(0, idcode, 1, sizeof(idcode), 0);
-		printf("\n");
-		goto err_manufacturer_probe;
-	}
+    #ifdef CONFIG_SPI_FLASH_OTHER
+        if (!flash) {
+        flash = malloc(sizeof(*flash));
+        memset(flash, 0, sizeof(*flash));
+        printf("=====SKIP SF PROBE=====\n");
+        flash->spi = spi;
+        flash->read = spi_flash_cmd_read_fast;
+        }
+    #else
+        if (!flash) {
+            printf("SF: Unsupported manufacturer %02x\n", *idp);
+            printf("idcodes : ");
+            print_buffer(0, idcode, 1, sizeof(idcode), 0);
+            printf("\n");
+            goto err_manufacturer_probe;
+        }
+    #endif
 
 	printf("SF: Detected %s with page size ", flash->name);
 	print_size(flash->sector_size, ", total ");
