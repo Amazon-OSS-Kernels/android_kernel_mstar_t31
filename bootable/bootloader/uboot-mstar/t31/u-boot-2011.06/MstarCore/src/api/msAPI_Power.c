@@ -356,7 +356,7 @@ void msAPI_Power_PowerDown_EXEC(void)
 
     if (!strcmp(amzn_target_device_name(), "sophia"))
     {
-		MDrv_WriteByte(0x1040, 0x01);//Sophia, Steffi IR Header
+		MDrv_WriteByte(0x1040, 0x01);//Sophia, abc123 IR Header
             memcpy((void *)&(u8IR2Cfg[0]), (void *)&(u8SophiaIR2Cfg[0]), (sizeof(u8SophiaIR2Cfg)));
     }
     else if (!strcmp(amzn_target_device_name(), "ABC") || !strcmp(amzn_target_device_name(), "abc123"))
