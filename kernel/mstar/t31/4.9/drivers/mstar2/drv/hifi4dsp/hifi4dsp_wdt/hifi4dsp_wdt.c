@@ -26,6 +26,10 @@
 #include "adf/adf_common.h"
 #endif
 
+#ifdef ENABLE_IPC_AGENT
+#include <hifi4dsp_agent/mt8570/acs_ipc_agent_driver.h>
+#endif
+
 #define DRV_NAME        "mtk-dsp_wdt"
 
 struct mtk_dsp_wdt_dev {
@@ -147,8 +151,12 @@ static struct notifier_block adsp_rst_notifier = {
 
 static irqreturn_t mtk_dsp_wdt_isr(int irq, void *dev_id)
 {
-        queue_work(dsp_wdt_queue, &dsp_wdt_work);
-	return IRQ_NONE;
+#ifdef ENABLE_IPC_AGENT
+    ipc_agent_set_wdt_triggered();
+#endif
+
+    queue_work(dsp_wdt_queue, &dsp_wdt_work);
+    return IRQ_NONE;
 }
 
 void hifi4dsp_wdt_handler(void)
@@ -160,6 +168,11 @@ void dsp_wdt_work_handler(struct work_struct *unused)
 {
     char data[32], *envp[] = { data, NULL };
     mtk_dsp_wdt_disable();
+
+#ifdef ENABLE_IPC_AGENT
+    ipc_agent_wdt_handle();
+#endif
+
     pr_notice("[%s] ADSP happens exception!\n", __func__);
 
     snprintf(data, sizeof(data), "ACTION=DSP_WTD_WHOLE");
