@@ -83,6 +83,15 @@ void MDrv_MSPI_CFG_CS(MS_BOOL Enable)
 
 #endif
 
+void MDrv_MSPI_DEMURA_CS_OUT(int Enable)
+{
+    #if defined(CONFIG_MSPI_CS_DEMURA)
+        MHal_MSPI_DEMURA_CS_OUT(Enable);
+    #else
+        return;
+    #endif
+}
+
 //Dolby 
 #if(ENABLE_DOLBY==1)
 
