@@ -29,8 +29,8 @@ obj-$(CONFIG_APDS9802ALS)	+= apds9802als.o
 obj-$(CONFIG_ISL29003)		+= isl29003.o
 obj-$(CONFIG_ISL29020)		+= isl29020.o
 obj-$(CONFIG_SENSORS_TSL2550)	+= tsl2550.o
-obj-$(CONFIG_SENSORS_TSL2540)	+= ams_tsl2540.o ams_tsl2540_als.o ams_i2c.o
 ifeq ($(TARGET_PRODUCT), $(filter $(TARGET_PRODUCT), brandenburg anna))
+obj-$(CONFIG_SENSORS_TSL2540)	+= ams_tsl2540.o ams_tsl2540_als.o ams_i2c.o
 obj-$(CONFIG_SENSORS_SC1233A)	+= presence/
 endif
 obj-$(CONFIG_DS1682)		+= ds1682.o
