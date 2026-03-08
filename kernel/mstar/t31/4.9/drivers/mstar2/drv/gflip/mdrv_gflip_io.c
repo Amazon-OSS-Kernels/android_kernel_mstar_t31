@@ -156,6 +156,7 @@ typedef struct
 {
     int s32Major;
     int s32Minor;
+    int refCnt;
     int refIndex;
     struct cdev cdev;
     struct file_operations fops;
@@ -165,6 +166,7 @@ static GFLIP_DEV _devGFLIP =
 {
     .s32Major = MDRV_MAJOR_GFLIP,
     .s32Minor = MDRV_MINOR_GFLIP,
+    .refCnt = 0,
     .refIndex =0,
     .cdev =
     {
@@ -190,8 +192,6 @@ struct
 }_filpGopIdxGFLIP[MAX_FILE_HANDLE_SUPPRT];
 MS_U16  g_u16GOPRefCnt[MAX_GOP_SUPPORT];
 MS_BOOL bfilpGopIdx = FALSE;
-
-static atomic_t gflip_ref_count = ATOMIC_INIT(0);
 
 #ifdef CONFIG_MSTAR_UDEV_NODE
 static struct class *gflip_class;
@@ -277,7 +277,7 @@ MS_U32 _MDrv_GFLIPIO_Init(MS_U32 u32GopIdx)
             }
         }
     }
-    printk("[%s][%d] u16Idx=%d,u16AllocIdx=%d ; u32GopIdx=%d \n",__FUNCTION__,__LINE__,_devGFLIP.refIndex, u16AllocIdx,u32GopIdx);
+    printk("PEIFEN   [%s][%d] u16Idx=%d,u16AllocIdx=%d ; u32GopIdx=%d \n",__FUNCTION__,__LINE__,_devGFLIP.refIndex, u16AllocIdx,u32GopIdx);
     _filpGopIdxGFLIP[_devGFLIP.refIndex].u32GOPIdx = u32GopIdx;
     //GFLIPIO_ASSERT(g_u16GOPRefCnt[u32GopIdx] >= 0);
 
@@ -1118,8 +1118,16 @@ int _MDrv_GFLIPIO_Open(struct inode *inode, struct file *filp)
 {
     GFLIPIO_KDBG("[GFLIP] GFLIP DRIVER OPEN\n");
 
-	atomic_inc(&gflip_ref_count);
-
+    GFLIPIO_ASSERT(_devGFLIP.refCnt>=0);
+#if ( defined (CONFIG_MSTAR_NEW_FLIP_FUNCTION_ENABLE))
+    GFLIPIO_KDBG("[GFLIP] New flip function enable\n");
+    printk(KERN_ALERT"[%s,%d][pid:%d][name:%s]_devGFLIP.refCnt=%d\n",__func__,__LINE__,current->pid,current->comm,_devGFLIP.refCnt);
+    if(_devGFLIP.refCnt == 0)//Init timier when first open gflip
+    {
+        MDrv_GFLIP_InitTimer();
+    }
+#endif
+    _devGFLIP.refCnt++;
     return 0;
 }
 
@@ -1129,8 +1137,7 @@ int _MDrv_GFLIPIO_Release(struct inode *inode, struct file *filp)
 
     GFLIPIO_KDBG("[GFLIP] GFLIP DRIVER CLOSE\n");
 
-	if (atomic_read(&gflip_ref_count) <= 0)
-		return -1;
+    GFLIPIO_ASSERT(_devGFLIP.refCnt>0);
 
     for(u32Idx=0; u32Idx<MAX_FILE_HANDLE_SUPPRT; u32Idx++)
     {
@@ -1149,7 +1156,7 @@ int _MDrv_GFLIPIO_Release(struct inode *inode, struct file *filp)
         _filpGopIdxGFLIP[u32Idx].filp = NULL;
      }
 
-	atomic_dec(&gflip_ref_count);
+    _devGFLIP.refCnt--;
 
     return 0;
 }
@@ -1216,10 +1223,10 @@ long _MDrv_GFLIPIO_IOCtl(struct file *filp, U32 u32Cmd, unsigned long u32Arg)
 {
     int err = 0;
     int retval = 0;
-
-	if (atomic_read(&gflip_ref_count) <= 0)
-		return -EFAULT;
-
+    if(_devGFLIP.refCnt <= 0)
+    {
+        return -EFAULT;
+    }
     /* check u32Cmd valid */
     if(MDRV_GFLIP_IOC_MAGIC == _IOC_TYPE(u32Cmd))
     {
@@ -1242,6 +1249,7 @@ long _MDrv_GFLIPIO_IOCtl(struct file *filp, U32 u32Cmd, unsigned long u32Arg)
         GFLIPIO_KDBG("[GFLIP] IOCtl MAGIC Error!!! (Cmd=%x)\n",u32Cmd);
         return -ENOTTY;
     }
+
     /* verify Access */
     if (_IOC_DIR(u32Cmd) & _IOC_READ)
     {
@@ -1511,6 +1519,7 @@ int _MDrv_GFLIPIO_ModuleInit(void)
     platform_driver_register(&Mstar_gflip_driver);
 
 #if ( defined (CONFIG_MSTAR_NEW_FLIP_FUNCTION_ENABLE))
+    printk(KERN_ALERT"[%s,%d][pid:%d][name:%s]_devGFLIP.refCnt=%d\n",__func__,__LINE__,current->pid,current->comm,_devGFLIP.refCnt);
     MDrv_GFLIP_InitTimer();
 #endif
 

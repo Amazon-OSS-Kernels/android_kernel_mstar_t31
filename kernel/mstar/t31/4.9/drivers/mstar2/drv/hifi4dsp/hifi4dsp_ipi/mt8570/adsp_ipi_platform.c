@@ -15,6 +15,8 @@
 #include <linux/stddef.h>
 #include <linux/interrupt.h>
 #include <linux/workqueue.h>
+#include <linux/kthread.h>
+#include <linux/sched/rt.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/pm_runtime.h>
 #include <linux/pm_wakeup.h>
@@ -111,17 +113,10 @@ void clr_adsp_to_host_status(enum adsp_core_id core_id, u32 status)
 						SPI_SPEED_LOW);
 }
 
-/*
 void memcpy_from_adsp(enum adsp_core_id core_id, void *trg, u32 src, int size)
 {
 	dsp_spi_read(src, trg, size, SPI_SPEED_LOW);
 	clr_adsp_to_host_status(core_id, IPC_MESSAGE_READY);
-}
-*/
-
-void memcpy_from_adsp_no_clr(enum adsp_core_id core_id, void *trg, u32 src, int size)
-{
-	dsp_spi_read(src, trg, size, SPI_SPEED_HIGH);
 }
 
 #if IPC_NOTIFY_METHOD == IPC_NOTIFY_BY_EINT
@@ -200,36 +195,56 @@ unsigned int is_adsp_ready(enum adsp_core_id core_id)
  * @param irq:      irq id
  * @param dev_id:   should be NULL
  */
-static struct workqueue_struct *ipi_queue;
-static struct work_struct ipi_work;
-static struct delayed_work ipi_delayed_work;
+static struct kthread_worker ipi_worker;
+static struct task_struct *ipi_worker_task;
+static struct kthread_work ipi_work;
+static struct kthread_delayed_work ipi_delayed_work;
 
 int mt8570_ipi_platform_resume(void)
 {
     if (is_from_suspend) {
         printk("%s resuming flow , queue delayed work!\n",__func__);
-		queue_delayed_work(ipi_queue, &ipi_delayed_work, msecs_to_jiffies(50));
+        kthread_queue_delayed_work(&ipi_worker, &ipi_delayed_work, msecs_to_jiffies(50));
         is_from_suspend = 0;
     }
     return 0;
 }
 
-void mt8570_ipi_work_handler(struct work_struct *unused)
+void mt8570_ipi_work_handler(struct kthread_work *unused)
 {
 	mt8570_ipi_handler(ADSP_CORE_0_ID);
 }
 
 irqreturn_t mt8570_core_0_irq_handler(int irq, void *dev_id)
 {
-	queue_work(ipi_queue, &ipi_work);
+    u16 sts;
+    //check interrupt source
+    sts = REG_ADDR((0x000F<<9) + (0x05<<2)) & BIT(8);
+    if(sts)
+    {
+        kthread_queue_work(&ipi_worker, &ipi_work);
+        //clear INTERRUPT for PAD_PM_GPIO_5
+        REG_ADDR((0x000F<<9) + (0x05<<2)) |= BIT(6);
+        return IRQ_HANDLED;
+    }
     return IRQ_NONE;
+
 }
 
 int mt8570_ipi_platform_init(struct platform_device *pdev)
 {
-	ipi_queue = alloc_ordered_workqueue("%s", __WQ_LEGACY | WQ_MEM_RECLAIM | WQ_HIGHPRI | WQ_CPU_INTENSIVE, "ipi_kworker");
-	INIT_WORK(&ipi_work, mt8570_ipi_work_handler);
-	INIT_DELAYED_WORK(&ipi_delayed_work, mt8570_ipi_work_handler);
+	struct sched_param param = { .sched_priority =  MAX_RT_PRIO / 2 + 1 };
+	kthread_init_worker(&ipi_worker);
+	ipi_worker_task = kthread_run(kthread_worker_fn,
+					&ipi_worker, "%s",
+					"ipi_kworker");
+	if (IS_ERR(ipi_worker_task)) {
+	dev_err(&pdev->dev, "failed to create ipi message task\n");
+	return PTR_ERR(ipi_worker_task);
+	}
+	sched_setscheduler(ipi_worker_task, SCHED_FIFO, &param);
+	kthread_init_work(&ipi_work, mt8570_ipi_work_handler);
+	kthread_init_delayed_work(&ipi_delayed_work, mt8570_ipi_work_handler);
 
 #if IPC_NOTIFY_METHOD == IPC_NOTIFY_BY_EINT
 	pctrl = devm_pinctrl_get(&pdev->dev);

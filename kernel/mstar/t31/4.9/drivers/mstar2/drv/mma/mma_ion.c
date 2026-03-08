@@ -221,10 +221,7 @@ int mma_ion_import(int fd, ion_user_handle_t* handle) {
 	}
 
     *handle = fd_data.handle;
-	buf_handle->pid = current->pid;
-	buf_handle->tgid = current->tgid;
-	scnprintf(buf_handle->comm, sizeof(buf_handle->comm),
-						"%s", current->comm);
+    buf_handle->tpid = current->tgid;
     dma_buf_put(dmabuf);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,0)
     ksys_close(db_ion_fd);
