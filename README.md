@@ -18,3 +18,4 @@
 - [Amazon Fire TV Smart TV   Xiaomi TV F2](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/xiaomi_tv_f2/xiomif2firetv_4k_2022-7.6.2.4-20230320)
 - [Amazon Fire TV Smart TV - Insignia 4K UHD](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/insignia_4k_uhd/amazonfiretvedition_4k_uhd-7.6.4.6-20230601)
 - [Amazon Fire TV Smart TV - Pioneer 4K UHD](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/pioneer_4k_uhd/amazonfiretvedition_4k_uhd-7.6.4.6-20230601)
+- [Fire TV 2 Series](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/2-series/fire_tv_2_series-7.6.3.0-20230405)
