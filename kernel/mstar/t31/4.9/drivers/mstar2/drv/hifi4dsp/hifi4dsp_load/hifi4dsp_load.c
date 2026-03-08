@@ -46,8 +46,11 @@
 #ifdef CONFIG_AMAZON_DSP_FRAMEWORK
 #include "adf/adf_status.h"
 #include "adf/adf_common.h"
-
 static int adfDbgReadFunc(uintptr_t dest, int size);
+#endif
+
+#ifdef ENABLE_IPC_AGENT
+#include <hifi4dsp_agent/mt8570/acs_ipc_agent_driver.h>
 #endif
 
 #define DSP_LOAD_UNIT_TEST	0
@@ -783,7 +786,7 @@ static int adfDbgCheckRunFunc(void)
 static void set_hifi4dsp_run_status(void)
 {
 #ifdef CONFIG_AMAZON_DSP_FRAMEWORK
-    u32 log_buf_size;
+    u32 log_buf_size = 0;
 #endif
 
 	hifi4dsp_load->boot_done = 1;
@@ -796,13 +799,18 @@ static void set_hifi4dsp_run_status(void)
 
 #ifdef CONFIG_AMAZON_DSP_FRAMEWORK
 	/* wait for DSP initialiation */
-	msleep(100);
-    spi_read_register(GPR_LOG_BUF_SIZE_ADDR, &log_buf_size, SPI_SPEED_LOW);
+	msleep(200);
+	spi_read_register(GPR_LOG_BUF_SIZE_ADDR, &log_buf_size, SPI_SPEED_LOW);
 
 	/* init the log dumping thread */
 	adfDebug_init((void *)adfDbgCheckRunFunc, (void *)adfDbgReadFunc, DSP_LOG_DUMP_PERIOD,
 				  log_buf_size);
 #endif
+
+#ifdef ENABLE_IPC_AGENT
+	ipc_agent_set_wdt_untriggered();
+#endif
+
     void mtk_dsp_wdt_enable(void);
     mtk_dsp_wdt_enable();
 }
