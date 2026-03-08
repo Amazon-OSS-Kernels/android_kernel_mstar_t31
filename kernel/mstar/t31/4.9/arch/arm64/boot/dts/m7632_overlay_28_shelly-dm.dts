@@ -45,6 +45,37 @@
         };
     };
 
+    fragment@4 {
+        target = <&keypad>;
+        __overlay__ {
+            keypad0 {
+                key_1 {
+                    linux,code = <0xfc>;
+                };
+            };
+            keypad1 {
+                key_1 {
+                    linux,code = <0xfc>;
+                };
+            };
+            keypad2 {
+                key_1 {
+                    linux,code = <0xfc>;
+                };
+            };
+            keypad3 {
+                key_1 {
+                    linux,code = <0xfc>;
+                };
+            };
+            keypad4 {
+                key_1 {
+                    linux,code = <0xfc>;
+                };
+            };
+        };
+    };
+
 };
 
 
