@@ -67,7 +67,6 @@
 #include "ms_utils.h"
 #include "crc_libs.h"
 
-
 #ifdef ALIGN
 #undef ALIGN
 #define ALIGN(x,a)        __ALIGN_MASK((x),(typeof(x))(a)-1)
@@ -76,6 +75,8 @@
 
 #define ALIGN_1MB                (1 * 1024 * 1024)
 #define DEMURA_SF_MAGIC_STRING   "Mstar CRC :\0"
+
+extern int snprintf(char *str, size_t size, const char *fmt, ...);
 
 struct mstar_crc_hdr {
 	char magic[12];
@@ -95,7 +96,8 @@ MS_BOOL init_spi_flash(void)
     if (sf_init_flag == FALSE)
     {
         memset(cmd, 0, sizeof(cmd));
-        snprintf(cmd, sizeof(cmd), "sf probe 0 %d %d", SPI_CLOCLK, SPI_MODE);
+        snprintf(cmd, sizeof(cmd), "sf probe %d:0 %d %d", SPI_CH, SPI_CLOCLK, SPI_MODE);
+        printf("sf probe %d:0 %d %d \n", SPI_CH, SPI_CLOCLK, SPI_MODE);
         if (run_command(cmd, 0) != 0)
         {
             printf("command(%s) error!\n", cmd);
@@ -112,6 +114,7 @@ MS_BOOL read_spi_flash(MS_U8 *pBuf, MS_U32 pos, MS_U32 length)
 
     memset(cmd, 0, sizeof(cmd));
     snprintf(cmd, sizeof(cmd), "sf read %p 0x%x 0x%x", pBuf, pos, length);
+    printf("sf read %p 0x%x 0x%x \n", pBuf, pos, length);
     if (run_command(cmd, 0) != 0)
     {
         printf("command(%s) error\n", cmd);
