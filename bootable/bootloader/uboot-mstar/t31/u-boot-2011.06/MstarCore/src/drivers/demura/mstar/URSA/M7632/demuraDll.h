@@ -51,36 +51,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *****************************************************************************/
+#ifndef _DEMURA_DLL_H_
+#define _DEMURA_DLL_H_
 
-#include <MsTypes.h>
-#include <halRegOp.h>
-#include "halFCIC.h"
+MS_U32 StrToHex(const char *psHex, int startIndex);
+MS_BOOL mstar_demura_interface (interface_info *Info1,  BinOutputInfo *bin_info);
 
+int get_demura_bin_size(void);
 
-MS_U16 HAL_FCIC_Read_Reg(MS_U16 reg)
-{
-    return HAL_DEMURA_Read2Byte(L_BK_FCIC(reg));
-}
-
-
-void HAL_FCIC_TurnOn(MS_BOOL bOnOff)
-{
-    MS_U16 regVal = HAL_DEMURA_Read2Byte(L_BK_FCIC(REG_FCIC_BYPASS_ON));
-
-    if (bOnOff == TRUE)
-    {
-        regVal &= (~BIT15);
-    }
-    else
-    {
-        regVal |= (BIT15);
-    }
-    HAL_DEMURA_Write2Byte(L_BK_FCIC(REG_FCIC_BYPASS_ON), regVal);
-
-    #if(CONFIG_DEMURA_FCIC_SRAM_SHARE)
-        regVal = HAL_DEMURA_Read2Byte(0x0133A8);
-        regVal &= (~BIT2);
-        HAL_DEMURA_Write2Byte(0x0133A8, regVal);
-    #endif
-}
-
+#endif
