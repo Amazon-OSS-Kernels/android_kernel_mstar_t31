@@ -175,6 +175,12 @@ void HAL_DEMURA_EnableDemura(MS_BOOL bEnable, DEMURA_PANEL_TYPE ptype)
     {
         HAL_DEMURA_Write2ByteMask((L_BK_DEMURA(0x2F)),  0x00, reg_mask);
     }
+
+    #if(CONFIG_DEMURA_FCIC_SRAM_SHARE)
+        reg_val = HAL_DEMURA_Read2Byte(0x0133A8);
+        reg_val |= BIT2;
+        HAL_DEMURA_Write2Byte(0x0133A8, reg_val);
+    #endif
 }
 
 

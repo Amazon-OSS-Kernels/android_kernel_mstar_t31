@@ -55,7 +55,11 @@
 #ifndef _HAL_FCIC_H_
 #define _HAL_FCIC_H_
 
+#if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_SHELLY)
+#define REG_FCIC_BASE                0x230900  // --> Bank_0x3307 (Main 0x302F, Sub 0x07)
+#else
 #define REG_FCIC_BASE                0x230700  // --> Bank_0x3307 (Main 0x302F, Sub 0x07)
+#endif
 
 #define REG_FCIC_FLASH_BASE_ADDR     0x50        // 16 bit_mode  ==> offset * 4Byte
 #define REG_FCIC_FLASH_DATA_NUM      0x52        // 16 bit_mode  ==> num  * 4Byte
