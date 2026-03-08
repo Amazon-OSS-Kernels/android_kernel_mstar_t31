@@ -2824,6 +2824,7 @@ VOID aisUpdateBssInfoForJOIN(IN P_ADAPTER_T prAdapter, P_STA_RECORD_T prStaRec, 
 	prAisBssInfo->fgIsQBSS = prStaRec->fgIsQoS;
 
 	/* 3 <4> Update BSS_INFO_T from BSS_DESC_T */
+	memset(&rParamSsid, 0, sizeof(PARAM_SSID_T));
 	if (prAisBssInfo->ucSSIDLen) {
 		rParamSsid.u4SsidLen = prAisBssInfo->ucSSIDLen;
 		COPY_SSID(rParamSsid.aucSsid, rParamSsid.u4SsidLen,
@@ -4778,7 +4779,7 @@ send_response:
 VOID aisSendNeighborRequest(IN P_ADAPTER_T prAdapter)
 {
 	struct SUB_ELEMENT_LIST *prSSIDIE;
-	UINT_8 aucBuffer[sizeof(*prSSIDIE) + 31];
+	UINT_8 aucBuffer[sizeof(*prSSIDIE) + ELEM_MAX_LEN_SSID];
 	P_BSS_INFO_T prBssInfo = prAdapter->prAisBssInfo;
 
 	kalMemZero(aucBuffer, sizeof(aucBuffer));
