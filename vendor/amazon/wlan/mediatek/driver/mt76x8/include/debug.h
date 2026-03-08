@@ -81,6 +81,10 @@
 
 extern UINT_8 aucDebugModule[];
 
+#ifdef CFG_SUPPORT_PRIVACY_INFO
+extern uint8_t empty_mac[];
+#endif
+
 /*******************************************************************************
 *                              C O N S T A N T S
 ********************************************************************************
@@ -145,6 +149,7 @@ typedef enum _ENUM_DBG_MODULE_T {
 #if (HIF_TX_RSRC_WMM_ENHANCE == 1)
 	DBG_HIF_WMM_ENHANCE_IDX,
 #endif
+	DBG_WNM_IDX,		/* 0x20 *//* WNM */
 	DBG_MODULE_NUM		/* Notice the XLOG check */
 } ENUM_DBG_MODULE_T;
 typedef enum _ENUM_DBG_ASSERT_CTRL_LEVEL_T {
@@ -181,7 +186,11 @@ typedef enum _ENUM_DBG_ASSERT_PATH_T {
 /* Debug print format string for the MAC Address */
 #define MACSTR		"%pM"
 /* Debug print argument for the MAC Address */
+#ifdef CFG_SUPPORT_PRIVACY_INFO
+#define MAC2STR(a)	empty_mac
+#else
 #define MAC2STR(a)	a
+#endif
 /* Debug print format string for the IPv4 Address */
 #define IPV4STR		"%pI4"
 /* Debug print argument for the IPv4 Address */

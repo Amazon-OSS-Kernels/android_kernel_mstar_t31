@@ -5323,10 +5323,12 @@ static ssize_t kalMetWriteProcfs(struct file *file, const char __user *buffer, s
 	int u8MetProfEnable;
 
 	IN P_GLUE_INFO_T prGlueInfo;
-	ssize_t result;
 
 	u4CopySize = (count < (sizeof(acBuf) - 1)) ? count : (sizeof(acBuf) - 1);
-	result = copy_from_user(acBuf, buffer, u4CopySize);
+	if (copy_from_user(acBuf, buffer, u4CopySize)) {
+		DBGLOG(INIT, ERROR, "error of copy from user\n");
+		return -EFAULT;
+	}
 	acBuf[u4CopySize] = '\0';
 
 	if (sscanf(acBuf, " %d %d", &u8MetProfEnable, &u16MetUdpPort) == 2)
@@ -5344,12 +5346,14 @@ static ssize_t kalMetCtrlWriteProcfs(struct file *file, const char __user *buffe
 	char acBuf[128 + 1];	/* + 1 for "\0" */
 	UINT_32 u4CopySize;
 	int u8MetProfEnable;
-	ssize_t result;
 
 	IN P_GLUE_INFO_T prGlueInfo;
 
 	u4CopySize = (count < (sizeof(acBuf) - 1)) ? count : (sizeof(acBuf) - 1);
-	result = copy_from_user(acBuf, buffer, u4CopySize);
+	if (copy_from_user(acBuf, buffer, u4CopySize)) {
+		DBGLOG(INIT, ERROR, "error of copy from user\n");
+		return -EFAULT;
+	}
 	acBuf[u4CopySize] = '\0';
 
 	if (sscanf(acBuf, " %d", &u8MetProfEnable) == 1)
@@ -5366,12 +5370,14 @@ static ssize_t kalMetPortWriteProcfs(struct file *file, const char __user *buffe
 	char acBuf[128 + 1];	/* + 1 for "\0" */
 	UINT_32 u4CopySize;
 	int u16MetUdpPort;
-	ssize_t result;
 
 	IN P_GLUE_INFO_T prGlueInfo;
 
 	u4CopySize = (count < (sizeof(acBuf) - 1)) ? count : (sizeof(acBuf) - 1);
-	result = copy_from_user(acBuf, buffer, u4CopySize);
+	if (copy_from_user(acBuf, buffer, u4CopySize)) {
+		DBGLOG(INIT, ERROR, "error of copy from user\n");
+		return -EFAULT;
+	}
 	acBuf[u4CopySize] = '\0';
 
 	if (sscanf(acBuf, " %d", &u16MetUdpPort) == 1)
@@ -5642,7 +5648,7 @@ VOID kalWowProcess(IN P_GLUE_INFO_T prGlueInfo, UINT_8 enable)
 				NULL,
 				0);
 
-	/* ARP offload */
+	/* ARP and DHCP offload */
 	wlanSetSuspendMode(prGlueInfo, enable);
 	/* p2pSetSuspendMode(prGlueInfo, TRUE); */
 
@@ -5824,6 +5830,34 @@ INT_32 kalPmResumeHandler(struct notifier_block *notifier, unsigned long pm_even
 	return NOTIFY_DONE;
 }
 #endif
+
+void kal_sched_set(struct task_struct *p, int policy,
+		const struct sched_param *param,
+		int nice)
+{
+#if !defined(CONFIG_ANDROID) && (KERNEL_VERSION(5, 9, 0) <= LINUX_VERSION_CODE)
+	/* apply auto-detection based on function description
+	* TODO:
+	* kernel prefer modify "current" only, add sanity here?
+	*/
+	struct sched_attr attr = {
+		.sched_policy = policy,
+		.sched_priority = param->sched_priority,
+		.sched_nice = nice,
+	};
+
+	if (policy == SCHED_NORMAL)
+		sched_set_normal(p, nice);
+	else if (policy == SCHED_FIFO)
+		sched_set_fifo(p);
+	else
+		sched_set_fifo_low(p);
+
+	sched_setattr_nocheck(p, &attr);
+#else
+	sched_setscheduler(p, policy, param);
+#endif
+}
 
 WLAN_STATUS kalUpdateBssChannel(IN P_GLUE_INFO_T prGlueInfo,
 						IN UINT_8 aucSSID[],
