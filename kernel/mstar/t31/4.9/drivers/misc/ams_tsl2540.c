@@ -51,8 +51,12 @@ extern struct tsl2540_chip *ams_chip;
 #define EEPROM_CAL_SKU           0    //color tag = 0
 #define EEPROM_MSN_LEN           16
 #define EEPROM_PAGE_SIZE         16
+#define OPT_STACK_ID             2
 extern int MDrv_HW_IIC_WriteBytes(u8 u8Port, u8 u8SlaveIdIIC, u8 u8AddrSizeIIC, u8 *pu8AddrIIC, u32 u32BufSizeIIC, u8 *pu8BufIIC);
 extern int MDrv_HW_IIC_ReadBytes(u8 u8Port, u8 u8SlaveIdIIC, u8 u8AddrSizeIIC, u8 *pu8AddrIIC, u32 u32BufSizeIIC, u8 *pu8BufIIC);
+
+/*** FIXME code change to support HVT AMB to keep MM team going to work on DBIQ */
+extern char *idme_get_config_name(void);
 
 static int firetv_read_calibration_data(struct device *dev, u8 *buf, int len);
 static int firetv_write_calibration_data(struct device *dev, u8 *buf, int len);
@@ -74,25 +78,65 @@ static char const *tsl2540_names[] = {
 	"tsl2540"
 };
 
-struct tsl2540_lux_segment als_lux_cofe[] = {
-	{1476, -7452, 372622},
-	{3039, -556,  151954},
-	{2649, -410,  132445}
+/* in order to use fixed point to calcuate lux, each coefficients
+ * is sacled by the factor of 1000000, dgf by 10000
+ * the DVT AMB is set to use ATIME=98.56ms
+ */
+static struct tsl2540_lux_segment als_lux_cofe[][3] = {
+   {{1059069, 226239,   69523}, {7284816, -1512431,   10726}, {  168708,   -11358,  226408}},
+   {{1921337, -40899,  967741}, { 854231,   -70533, 2077421}, { 1145084,  -162578, 1604706}}
 };
+/* 
+static struct tsl2540_lux_segment als_lux_cofe[][3] = {
+   {{1059069, 226239,    69523}, {7284816, -1512431,   10726}, { 168708,   -11358,  226408}},
+   {{1782727, -36262,  1034827}, {1524497,  -189168, 1280168}, { 884594,  -119894, 2023467}}
+};
+*/
 
-#define ALS_LUX_TVIS   (20437)
-#define ALS_LUX_TIR    (1087)
-#define ALS_LUX_EDGE_1 (786)
-#define ALS_LUX_EDGE_2 (2388)
+/* 99 ATIME=99ms for DVT
+static struct tsl2540_lux_segment als_lux_cofe[][3] = {
+   {{1059069, 226239,   69523}, {7284816, -1512431,   10726}, { 168708,   -11358,  226408}},
+   {{1942088, -39900,  954164}, {1637025,  -203073, 1197418}, {1166928,  -158162, 1540774}}
+};
+*/
+
+static u32 als_lux_tvis[OPT_STACK_ID]   = {204370000, 32932787}; //scaled by 10000
+static u32 als_lux_tir[OPT_STACK_ID]    = {10870000,  1883169};  //scaled by 10000
+static u32 als_lux_edge_1[OPT_STACK_ID] = {1262,  642};  //scaled by 1000
+static u32 als_lux_edge_2[OPT_STACK_ID] = {3038,  2428}; //scaled by 1000
+
+/*** FIXME code change to support HVT AMB to keep MM team going to work on DBIQ */
+static int tsl2540_check_device_id(struct tsl2540_chip *chip)
+{
+    char config_name[25];
+    struct device *dev = &chip->client->dev;
+
+    strncpy (config_name, idme_get_config_name(), 20);
+
+    if ( ( 0 == strcasecmp(config_name, "abc123_hvt")) ||
+         ( 0 == strcasecmp(config_name, "abc123eu_ffhvt"))) {
+	  dev_info(dev, "%s: HVT device detected %s.\n", __func__, config_name);
+	  return 0; //HVT
+    }
+    else{
+	  dev_info(dev, "%s: DVT or up device detected %s.\n", __func__, config_name);
+          return 1; //non-HVT device
+    }
+}
 
 /* Registers to restore */
 static u8 const restorable_regs[] = {
 	TSL2540_REG_PERS,
-	TSL2540_REG_PGCFG0,
-	TSL2540_REG_PGCFG1,
+	TSL2540_REG_PGCFG0, //what is this, no document
+	TSL2540_REG_PGCFG1, //no document
 	TSL2540_REG_CFG1,
 	TSL2540_REG_CFG2,
-	TSL2540_REG_PTIME,
+	TSL2540_REG_CFG3,
+	TSL2540_REG_AILT,
+	TSL2540_REG_AILT_HI,
+	TSL2540_REG_AIHT,
+	TSL2540_REG_AIHT_HI,
+	TSL2540_REG_PTIME, //unducumented
 	TSL2540_REG_ATIME,
 };
 
@@ -106,20 +150,36 @@ static int tsl2540_irq_handler(struct tsl2540_chip *chip)
 			&chip->shadow[TSL2540_REG_STATUS]);
 	status = chip->shadow[TSL2540_REG_STATUS];
 
-	if (status == 0)
-		return 0;  /* not our interrupt */
-
-	do {
-
-		/* Clear the interrupts we'll process */
-		ams_i2c_write_direct(chip->client, TSL2540_REG_STATUS, status);
+	if (status == 0){
+	    return 0;  /* not our interrupt */
+	}
+        do {
+             /* Clear the interrupts we'll process */
+             //ams_i2c_write_direct(chip->client, TSL2540_REG_STATUS, status);
 
 		/*
 		 * ALS
 		 */
-		if (status & TSL2540_ST_ALS_IRQ) {
+		if (status & TSL2540_ST_ALS_SAT) {
+			//chip->in_asat = 1;
+			dev_warn(&chip->client->dev,
+					"Saturation, ASAT is %d\n", chip->in_asat);
+			chip->is_als_valid = 0;
+		} else {
+			//chip->in_asat = 0;
+			chip->is_als_valid = 1;
+		}
+
+		if ((status & TSL2540_ST_ALS_IRQ) ||
+			(status & TSL2540_ST_ALS_SAT)) {
 			tsl2540_read_als(chip);
 			tsl2540_report_als(chip);
+			//dev_info(&chip->client->dev,
+			//	"Lux: %u, ch0: %u, ch1: %u, "
+			//	"asat: %u, is_valid: %u\n",
+			//	chip->als_inf.lux, chip->als_inf.als_ch0,
+			//	chip->als_inf.als_ch1, chip->in_asat,
+			//	chip->is_als_valid);
 		}
 
 		/*
@@ -127,7 +187,6 @@ static int tsl2540_irq_handler(struct tsl2540_chip *chip)
 		 */
 		if (status & TSL2540_ST_CAL_IRQ) {
 			chip->amscalcomplete = true;
-
 			/*
 			 * Calibration has completed, no need for more
 			 *  calibration interrupts. These events are one-shots.
@@ -141,7 +200,6 @@ static int tsl2540_irq_handler(struct tsl2540_chip *chip)
 				&chip->shadow[TSL2540_REG_STATUS]);
 		status = chip->shadow[TSL2540_REG_STATUS];
 	} while (status != 0);
-
 	return 1;  /* we handled the interrupt */
 }
 
@@ -166,7 +224,7 @@ bypass:
 
 static int tsl2540_flush_regs(struct tsl2540_chip *chip)
 {
-	unsigned int i;
+	int i;
 	int rc;
 	u8 reg;
 
@@ -234,52 +292,65 @@ static void tsl2540_set_defaults(struct tsl2540_chip *chip)
 	if (chip->pdata) {
 		dev_info(dev, "%s: Loading pltform data\n", __func__);
 		chip->params.persist = chip->pdata->parameters.persist;
-		chip->pdata->parameters.als_gain = AGAIN_4;;
 		chip->params.als_gain = chip->pdata->parameters.als_gain;
 		chip->params.als_gain_factor = chip->pdata->parameters.als_gain_factor;
 		chip->params.als_tvis = chip->pdata->parameters.als_tvis;
-		chip->params.als_tir = chip->pdata->parameters.als_tir;
+		chip->params.als_tir   = chip->pdata->parameters.als_tir;
 		chip->params.als_edge1 = chip->pdata->parameters.als_edge1;
 		chip->params.als_edge2 = chip->pdata->parameters.als_edge2;
-		chip->params.als_time = chip->pdata->parameters.als_time;
+		chip->params.als_time  = chip->pdata->parameters.als_time;
 		chip->params.als_deltap = chip->pdata->parameters.als_deltap;
-		memcpy(chip->params.lux_segment, chip->pdata->parameters.lux_segment, 3*sizeof(struct tsl2540_lux_segment)); 
+		memcpy(chip->params.lux_segment, chip->pdata->parameters.lux_segment, 3*sizeof(struct tsl2540_lux_segment));
 		chip->params.az_iterations = chip->pdata->parameters.az_iterations;
 	} else {
 		dev_info(dev, "%s: use defaults\n", __func__);
 		chip->params.persist = ALS_PERSIST(2);
 		chip->params.als_gain = AGAIN_4;
-		chip->params.als_gain_factor = 0;
+		chip->params.als_gain_factor = 1;
 		chip->params.als_time = AW_TIME_MS(200);
 		chip->params.als_deltap = 10;
-		chip->params.als_tvis = chip->pdata->parameters.als_tvis;
-		chip->params.als_tir = chip->pdata->parameters.als_tir;
-		chip->params.als_edge1 = chip->pdata->parameters.als_edge1;
-		chip->params.als_edge2 = chip->pdata->parameters.als_edge2;
-		chip->params.als_time = chip->pdata->parameters.als_time;
-		memcpy(chip->params.lux_segment, chip->pdata->parameters.lux_segment, 3*sizeof(struct tsl2540_lux_segment)); 
+		chip->params.als_tvis  = 3293;
+		chip->params.als_tir   = 188;
+		chip->params.als_edge1 = 642;
+		chip->params.als_edge2 = 2428;
+		chip->params.als_time  = 0x22;
+		memcpy(chip->params.lux_segment, als_lux_cofe[chip->als_inf.stack_id], 3*sizeof(struct tsl2540_lux_segment));
 		chip->params.az_iterations = 64;
 	}
 
-	chip->als_gain_auto = false;
+	/*FIXME, use fixed gain for HVT and auto gain for others */
+	if ( chip->als_inf.stack_id == 0 ) {
+	   chip->als_gain_auto = false;
+	   dev_info(dev, "%s: use fixed gain for HVT device.\n", __func__);
+	}
+	else {
+	   chip->als_gain_auto = true;
+	   dev_info(dev, "%s: use auto gain for DVT and up.\n", __func__);
+	}
+
+	/* the max count value is 35839 at ATIME = 98.56ms 
+	 * 90% of the max coun value is 32255, the defaul
+	 * low threshold is 35839/200 = 179
+	 */
+	chip->als_inf.saturation = ((chip->params.als_time + 1) * 1024 -1) * 9 / 10; //90% of the max count
+	chip->als_inf.full_gain = 16;
+	chip->als_inf.low_thrs  = chip->als_inf.saturation / 200;
+	chip->als_inf.high_thrs = chip->als_inf.saturation / 4;
 
 	/* Copy the default values into the register shadow area */
 	sh[TSL2540_REG_PERS]    = chip->params.persist;
 	sh[TSL2540_REG_ATIME]   = chip->params.als_time;
 	sh[TSL2540_REG_CFG1]    = chip->params.als_gain;
 	sh[TSL2540_REG_AZ_CONFIG] = chip->params.az_iterations;
-	switch (chip->params.als_gain_factor) {
-	case TSL2540_50_PERCENTS:
-		sh[TSL2540_REG_CFG2] = 0x00;
-		break;
-	case TSL2540_200_PERCENTS:
-		sh[TSL2540_REG_CFG2] =  (0x1 << TSL2540_SHIFT_AGAINL);
-		break;
-	case TSL2540_100_PERCENTS:
-	default:
-		sh[TSL2540_REG_CFG2] = 0x1 << TSL2540_SHIFT_AGAINL;
-		break;
-	}
+	//set interrupt clear bit, read to clear
+	sh[TSL2540_REG_CFG2]    = 0x4;
+	sh[TSL2540_REG_CFG3]    = 0xCC;
+	//set low threshold for interupt
+	sh[TSL2540_REG_AILT]    = 0x0A;
+	sh[TSL2540_REG_AILT_HI] = 0x00;
+	//set hi threshold for interupt
+	sh[TSL2540_REG_AIHT]    = 0x90;
+	sh[TSL2540_REG_AIHT_HI] = 0xE2;
 	tsl2540_flush_regs(chip);
 }
 
@@ -552,8 +623,10 @@ int tsl2540_init_dt(struct tsl2540_i2c_platform_data *pdata)
 	if (!of_property_read_u32(np, "als_deltap", &val))
 		pdata->parameters.als_deltap = val;
 
-	if (!of_property_read_u32(np, "als_time", &val))
-		pdata->parameters.als_time = val;
+	//if (!of_property_read_u32(np, "als_time", &val))
+	//	pdata->parameters.als_time = val;
+
+	pdata->parameters.als_time = 0x22; //overwritten dbt
 
 	//if (!of_property_read_u32(np, "d_factor", &val))
 	//	pdata->parameters.d_factor = val;
@@ -570,8 +643,8 @@ int tsl2540_init_dt(struct tsl2540_i2c_platform_data *pdata)
 	//if (!of_property_read_s32(np, "ch1_coef1", &ival))
 	//	pdata->parameters.lux_segment[1].ch1_coef = ival;
 
-	if (!of_property_read_u32(np, "az_iterations", &val))
-		pdata->parameters.az_iterations = val;
+	//if (!of_property_read_u32(np, "az_iterations", &val))
+	pdata->parameters.az_iterations = 32;
 
 	if (!of_property_read_u32(np, "als_can_wake", &val))
 		pdata->als_can_wake = (val == 0) ? false : true;
@@ -591,35 +664,52 @@ MODULE_DEVICE_TABLE(of, tsl2540_i2c_dt_ids);
 #endif
 
 #ifdef CONFIG_AMS_ADJUST_WITH_BASELINE
-#define ALS_CAL_OF_PATH "/idme/alscal"
 #define ALS_LUX_400 400
-#define ALS_LUX_20 20
+#define ALS_LUX_20  20
 /*
  *  Calibration format is
- *    ams_<input lux 0>_0=<ch0_reading>,<actual_lux>,<ch1_reading><SP>
- *    ams_<input lux 400>_0=<ch0_reading>,<actual_lux>,<ch1_reading>
- *    where <SP> = single space character and all values are integers.
+ *    <stack_id>:<ch0_reading_0>,<actual_lux_0>,<ch1_reading_0>:
+ *    <ch0_reading_20>,<actual_lux 20>,<ch1_reading_20>:<ch0_reading_400>,
+ *    <actual_lux_400>,<ch1_reading_400>
+ *    where all values are 16bit integers.
  *    e.g. For calibration at input lux=0 and lux=400 is
- *      ams_0_0=1,2.000,1 ams_400_0=210,238.667,30
+ *    0:1,2,1:120,13,23:670,399,450
  */
-#define ALS_CAL_FORMAT "ams_0_0=%d,%d,%d ams_400_0=%d,%d,%d ams_20_0=%d,%d"
-
 static void tsl2540_get_calibration(struct tsl2540_chip *chip)
 {
 	struct tsl2540_i2c_platform_data *pdata = chip->pdata;
 	struct device *dev = &chip->client->dev;
-	u8 cal_data[EEPROM_CAL_DATA_LEN];
-	int stack_id, ch0_raw_lux0, ch1_raw_lux0, lux_0, ch0_raw_lux20, ch1_raw_lux20, lux_20;
+	u8 cal_data[EEPROM_CAL_DATA_LEN], stack_id;
+	int ch0_raw_lux0, ch1_raw_lux0, lux_0, ch0_raw_lux20, ch1_raw_lux20, lux_20;
 	int ch0_raw_lux400, ch1_raw_lux400, lux_400;
-	int ret;
+	int ret, i;
 
-        ret = firetv_read_calibration_data(dev, cal_data, EEPROM_CAL_DATA_LEN);
-	if (ret < 0) {
-	    pr_warn("tsl2540: failed to load calibration data from EEPROM!\n");
-	    goto failed;
+	/* FIXME change to use config_name rather then stack ID for ABM type*/
+        stack_id = tsl2540_check_device_id(chip);
+	ret = firetv_read_calibration_data(dev, cal_data, EEPROM_CAL_DATA_LEN);
+	if (ret <= 0) {
+	    pr_warn("tsl2540: failed to load calibration data from EEPROM! retry...\n");
+	    for (i = 0; i < 3; i++ ){
+               ret = firetv_read_calibration_data(dev, cal_data, EEPROM_CAL_DATA_LEN);
+	       mdelay(50);
+	       if (ret > 0)
+                   break;
+	    }
 	}
+        if (ret <= 0)
+	    goto failed;
 
-	stack_id = (int)cal_data[0];
+	/* if the ABM module has STACK_ID programmed then it should be used to identify the module
+	 * this is not the case now so has to use config_name to match the ABM module this will stop
+	 * working if DVT ABM module is put on HVT device or vice versa. Ignore the STACK_ID fron
+	 * EEPROM.
+	 */
+
+	if ( stack_id > 1 ) //only support two groups of coefficents HVT and DVT.
+	     goto failed;
+
+	//stack_id = 1; //remove it to add to support HVT
+	chip->als_inf.stack_id = stack_id;
 	ch0_raw_lux0 = (int) (cal_data[1] << 8 | cal_data[2]);
 	lux_0 = (int) (cal_data[3] << 8 | cal_data[4]);
         ch1_raw_lux0 = (int) (cal_data[5] << 8 | cal_data[6]);
@@ -629,74 +719,25 @@ static void tsl2540_get_calibration(struct tsl2540_chip *chip)
 	ch0_raw_lux400 = (int) (cal_data[13] << 8 | cal_data[14]);
 	lux_400 = (int) (cal_data[15] << 8 | cal_data[16]);
 	ch1_raw_lux400 = (int) (cal_data[17] << 8 | cal_data[18]);
-	
-	if (stack_id != 0 || ch0_raw_lux400 == 0 || ch1_raw_lux400 == 0)
+	if ( ch0_raw_lux400 == 0 || ch1_raw_lux400 == 0 || ch0_raw_lux400 == 0xFFFF || ch1_raw_lux400 == 0xFFFF)
 	    goto failed;
 
 	pdata->lux400_ch0 = ch0_raw_lux400;
 	pdata->lux400_ch1 = ch1_raw_lux400;
 	pdata->lux400_lux = lux_400;
-	pdata->lux20_lux = lux_20;
-	pr_info("ALSCAL: alscal ch0=%d ch1=%d lux=%d lux_20=%d\n",
-				ch0_raw_lux0, ch1_raw_lux0, lux_400, lux_20);
+	pdata->lux20_lux  = lux_20;
+	pr_info("als cal data: vir_400 = %d ir_400 = %d.\n", ch0_raw_lux400, ch1_raw_lux400);
 	return;
 failed:
 	/* calibration data is not available */
-	pdata->lux400_ch0 = 32768;
-	pdata->lux400_ch1 = 32768;
+	pdata->lux400_ch0 = 2500;
+	pdata->lux400_ch1 = 130;
 	pdata->lux400_lux = ALS_LUX_400;
-	pdata->lux20_lux = ALS_LUX_20;
-	pr_info("ALSCAL: alscal default used - ch0=0 ch1=0 lux=400, lux_20=20\n");
+	pdata->lux20_lux  = ALS_LUX_20;
+	chip->als_inf.stack_id  = 1; // if the ABM is not calibrated or an invalid stack_id is detected, set it to be DVT ABM
+	pr_info("als cal data: failed to read data from epprom, use default values vis_400 = %d, ir_400 =  %d,\n",
+                pdata->lux400_ch0, pdata->lux400_ch1);
 }
-
-#if 0
-static void tsl2540_get_calibration(struct tsl2540_chip *chip)
-{
-	struct tsl2540_i2c_platform_data *pdata = chip->pdata;
-	struct device_node *ap = NULL;
-	char *alscal_idme = NULL;
-	char *ptr;
-	int n, dummy, ch0, ch1, lux, lux_20;
-
-	ap = of_find_node_by_path(ALS_CAL_OF_PATH);
-	if (ap)
-		alscal_idme = (char *)of_get_property(ap, "value", NULL);
-	else {
-		pr_warn("ALSCAL: could not get alscal idme entry\n");
-		goto failed;
-	}
-
-	/* search for signature andskip the leading spaces */
-	ptr = strstr(alscal_idme, "ams_0_0");
-	if (ptr == NULL) {
-		pr_warn("ALSCAL: unable to find calibration\n");
-		goto failed;
-	}
-
-	n = sscanf(ptr, ALS_CAL_FORMAT, &ch0, &dummy, &ch1,
-				&dummy, &lux, &dummy, &dummy, &lux_20);
-
-	if (n != 8) {
-		pr_warn("ALSCAL: alscal format incorrect\n");
-		goto failed;
-	}
-
-	pdata->lux0_ch0 = ch0;
-	pdata->lux0_ch1 = ch1;
-	pdata->lux400_lux = lux;
-	pdata->lux20_lux = lux_20;
-	pr_info("ALSCAL: alscal ch0=%d ch1=%d lux=%d lux_20=%d\n",
-				ch0, ch1, lux, lux_20);
-	return;
-failed:
-	/* calibration data is not available */
-	pdata->lux0_ch0 = 0;
-	pdata->lux0_ch1 = 0;
-	pdata->lux400_lux = ALS_LUX_400;
-	pdata->lux20_lux = ALS_LUX_20;
-	pr_info("ALSCAL: alscal default used - ch0=0 ch1=0 lux=400, lux_20=20\n");
-}
-#endif
 
 
 //FIXME, this function does not work if reg_start is not zero
@@ -902,6 +943,7 @@ static ssize_t tsl2540_cal_store(struct device *dev, struct device_attribute *at
 
              ret = firetv_write_calibration_data(dev, cal_value, EEPROM_CAL_DATA_LEN);
        }
+       chip->als_inf.stack_id = tag;
        pdata->lux400_ch0 = ch0_raw_lux400;
        pdata->lux400_ch1 = ch1_raw_lux400;
        pdata->lux400_lux = lux400;
@@ -948,10 +990,11 @@ static ssize_t tsl2540_abmsn_lock_show(struct device *dev, struct device_attribu
 {
        struct tsl2540_chip *chip = dev_get_drvdata(dev);
        int enable, num;
-       u8 abm_lock[2] = {0};
+       u8 abm_sn[EEPROM_MSN_LEN + 1];
 
        AMS_MUTEX_LOCK(&chip->lock);
-       num = firetv_write_abm_sn(dev, abm_lock, 1);
+       firetv_read_abm_sn(dev, abm_sn, EEPROM_MSN_LEN);
+       num = firetv_write_abm_sn(dev, abm_sn, 1);
        AMS_MUTEX_UNLOCK(&chip->lock);
        if (num < 0)
 	   enable = 1; //locked
@@ -1002,10 +1045,6 @@ static const struct attribute_group tsl2540_attr_group = {
 static void tsl2540_setup(struct tsl2540_chip *chip)
 {
 	struct tsl2540_i2c_platform_data *pdata = chip->pdata;
-
-#ifdef CONFIG_AMS_ADJUST_WITH_BASELINE
-	tsl2540_get_calibration(chip);
-#endif
 
 	if (pdata->boot_on)
 		tsl2540_configure_als_mode(chip, 1);
@@ -1077,12 +1116,6 @@ static int tsl2540_probe(struct i2c_client *client,
 		powered = true;
 		mdelay(10);
 	}
-        //init setup for lux calcualtion
-        pdata->parameters.als_tvis  = ALS_LUX_TVIS; 
-	pdata->parameters.als_tir   = ALS_LUX_TIR; 
-	pdata->parameters.als_edge1 = ALS_LUX_EDGE_1; 
-	pdata->parameters.als_edge2 = ALS_LUX_EDGE_2;
-	memcpy(pdata->parameters.lux_segment, als_lux_cofe, 3*sizeof(struct tsl2540_lux_segment));
 
 	chip = kzalloc(sizeof(struct tsl2540_chip), GFP_KERNEL);
 	if (!chip) {
@@ -1095,11 +1128,29 @@ static int tsl2540_probe(struct i2c_client *client,
 	chip->pdata = pdata;
 	i2c_set_clientdata(client, chip);
 
+	//init setup for lux calcualtion
+#ifdef CONFIG_AMS_ADJUST_WITH_BASELINE
+	tsl2540_get_calibration(chip);
+#endif
+        pdata->parameters.als_tvis  = als_lux_tvis[chip->als_inf.stack_id];
+	pdata->parameters.als_tir   = als_lux_tir[chip->als_inf.stack_id];
+	pdata->parameters.als_edge1 = als_lux_edge_1[chip->als_inf.stack_id];
+	pdata->parameters.als_edge2 = als_lux_edge_2[chip->als_inf.stack_id];
+	memcpy(pdata->parameters.lux_segment, als_lux_cofe[chip->als_inf.stack_id], 3*sizeof(struct tsl2540_lux_segment));
+	dev_info(dev, "%s: device setup, stack_id: %d, tvis: %u, tir: %u, edge_1: %u, edge_2: %u\n",
+			__func__, chip->als_inf.stack_id, pdata->parameters.als_tvis, pdata->parameters.als_tir, pdata->parameters.als_edge1, pdata->parameters.als_edge2);
+	dev_info(dev, "%s: lux_seg[0].ch0_coef: %u, lux_seg[0].ch1_coef: %d, lux_seg[0].dgf: %u\n",
+			__func__, pdata->parameters.lux_segment[0].ch0_coef, pdata->parameters.lux_segment[0].ch1_coef, pdata->parameters.lux_segment[0].dgf);
+	dev_info(dev, "%s: lux_seg[1].ch0_coef: %u, lux_seg[1].ch1_coef: %d, lux_seg[1].dgf: %u\n",
+			__func__, pdata->parameters.lux_segment[1].ch0_coef, pdata->parameters.lux_segment[1].ch1_coef, pdata->parameters.lux_segment[1].dgf);
+	dev_info(dev, "%s: lux_seg[2].ch0_coef: %u, lux_seg[2].ch1_coef: %d, lux_seg[2].dgf: %u\n",
+			__func__, pdata->parameters.lux_segment[2].ch0_coef, pdata->parameters.lux_segment[2].ch1_coef, pdata->parameters.lux_segment[2].dgf);
+
 	/*
 	 * Validate the appropriate ams device is available for this driver
 	 */
 
-	ret = tsl2540_get_id(chip, &id, &rev, &auxid);
+	tsl2540_get_id(chip, &id, &rev, &auxid);
 
 	dev_info(dev, "%s: device id:%02x device aux id:%02x device rev:%02x\n",
 			__func__, id, auxid, rev);
@@ -1394,3 +1445,4 @@ module_exit(tsl2540_exit);
 
 MODULE_DESCRIPTION("AMS-TAOS tsl2540 ALS sensor driver");
 MODULE_LICENSE("GPL");
+MODULE_VERSION("2.4");

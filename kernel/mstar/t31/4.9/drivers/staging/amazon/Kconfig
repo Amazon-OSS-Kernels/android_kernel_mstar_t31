@@ -65,4 +65,6 @@ config MP_RTC_WAKEUP_DEBUG
 
 endif # if AMAZON
 
+source "drivers/staging/amazon/dspframework/Kconfig"
+
 endmenu

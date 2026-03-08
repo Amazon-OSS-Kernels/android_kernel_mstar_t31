@@ -449,6 +449,9 @@ U32 eMMC_FCIE_ErrHandler_ReInit_Ex(void)
 		return u32_err;
 	}
 
+	//disable power saving mode
+	REG_FCIE_CLRBIT(FCIE_PWR_SAVE_CTL, BIT_POWER_SAVE_MODE|BIT_POWER_SAVE_MODE_INT_EN);
+
     REG_FCIE_SETBIT(FCIE_MIE_FUNC_CTL, BIT_EMMC_ACTIVE);
 
 	g_eMMCDrv.u32_DrvFlag = 0;
@@ -497,6 +500,9 @@ U32 eMMC_FCIE_ErrHandler_ReInit_Ex(void)
 		}
 		eMMC_debug(eMMC_DEBUG_LEVEL,1,"eMMC: enable cache control success\n");
 	}
+
+	//init OK enable power saving mode
+	REG_FCIE_SETBIT(FCIE_PWR_SAVE_CTL, BIT_POWER_SAVE_MODE|BIT_POWER_SAVE_MODE_INT_EN);
 
 	return u32_err;
 }

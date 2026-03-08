@@ -59,6 +59,8 @@ static unsigned int boot_complete;
 static unsigned int backlight_inverse;
 static unsigned int backlight_gpio;
 
+static unsigned int led_device_backlight_status; /* 1: on, 0: off */
+
 char *idme_get_config_name(void);
 char *idme_get_product_name(void);
 
@@ -71,6 +73,7 @@ typedef enum {
 
 /* APE5030 Related.. */
 #define APE5030_CH_MAP_ARG "ape5030_ch_map="
+#define APE5030_DEV_NUM_ARG "ape5030_dev_num="
 
 // Registers
 #define LDM_APE5030_SINGLE_BYTE      0x1
@@ -110,6 +113,8 @@ static void _init_ldm_led_device(void)
 {
     MSPI_config stDrvLdMspiInfo = {};
     int i = 0;
+    unsigned char ape5030_dev_num = 0;
+    char *ape5030_dev_num_arg = strstr(saved_command_line, APE5030_DEV_NUM_ARG);
 
     if(!isLdmLedDeviceInitialized)
     {
@@ -127,8 +132,18 @@ static void _init_ldm_led_device(void)
                 stDrvLdMspiInfo.tMSPI_FrameConfig.u8RBitConfig[i]= 0x07;
             }
 
+            /* get ape5030 device number from boot args. */
+            if(ape5030_dev_num_arg)
+            {
+                sscanf(ape5030_dev_num_arg + strlen(APE5030_DEV_NUM_ARG), "%d", &ape5030_dev_num);
+                device_num = ape5030_dev_num;
+            }
+            else
+            {
+                device_num = 6; //default.
+            }
+
             MspiClk = 6000000;
-            device_num = 6;
             eChannel = E_MSPI1;
 
             MDrv_MSPI_Init(eChannel);
@@ -184,21 +199,31 @@ static u8 get_ldm_led_device_backlight(void)
 {
     int i = 0;
     unsigned char isOn = 0;
+    static unsigned char isDoneForFirstRead = false;
 
     if(!isLdmLedDeviceInitialized)
         _init_ldm_led_device();
 
     if(_getSupportedLdmLedDeivceType() == LDM_LED_DEVICE_TYPE_APE5030)
     {
-        /* read all Led channels from APE5030.  */
-        for(i = 0 ; i < device_num ; i++)
+        if(isDoneForFirstRead == false) // only first time needs to get the actual status from led device.
         {
-            /* read reg CUR_ON_1 and CUR_ON_2 from APE5030, if found any LED channel turning on, will report backlight as 1. */
-            if(MSPI_Read_APE5030_SingleData(eChannel, i, 0x01, device_num) || (MSPI_Read_APE5030_SingleData(eChannel, i, 0x02, device_num)))
+            /* read all Led channels from APE5030.  */
+            for(i = 0 ; i < device_num ; i++)
             {
-                isOn = 1;
-                break;
+                /* read reg CUR_ON_1 and CUR_ON_2 from APE5030, if found any LED channel turning on, will report backlight as 1. */
+                if(MSPI_Read_APE5030_SingleData(eChannel, i, 0x01, device_num) || (MSPI_Read_APE5030_SingleData(eChannel, i, 0x02, device_num)))
+                {
+                    isOn = 1;
+                    break;
+                }
             }
+            led_device_backlight_status = isOn;
+            isDoneForFirstRead = true;
+        }
+        else
+        {
+            isOn = led_device_backlight_status;
         }
     }
 
@@ -239,6 +264,8 @@ static void set_ldm_led_device_backlight(unsigned char on)
             {
                 MSPI_Write_SingleAPE5030_SingleData(eChannel, (i+1), 0x02, ape5030_ch_map[i + 6], device_num);
             }
+
+            led_device_backlight_status = true;
         }
     }
     else
@@ -258,6 +285,8 @@ static void set_ldm_led_device_backlight(unsigned char on)
             {
                 MSPI_Write_SingleAPE5030_SingleData(eChannel, (i+1), 0x02, 0x00, device_num);
             }
+
+            led_device_backlight_status = false;
         }
     }
 }
@@ -364,6 +393,8 @@ unsigned int toggle_backlight(unsigned int keycode)
 				(keycode == KEY_APP2) ||
 				(keycode == KEY_APP3) ||
 				(keycode == KEY_APP4) ||
+				(keycode == KEY_BUTTON1) ||
+				(keycode == KEY_BUTTON2) ||
 				(keycode == KEY_WAKEUP)) {
 			if (!backlight_status)
 				set_backlight(1);

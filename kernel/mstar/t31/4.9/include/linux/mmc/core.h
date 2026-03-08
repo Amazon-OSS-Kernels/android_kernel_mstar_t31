@@ -148,6 +148,14 @@ struct mmc_request {
 #endif
 };
 
+
+struct vendor_command_data {
+	u8 sub_number;
+	u8 dummy_data[3];
+	u8 block_cnt[4];
+	u8 reserved[504];
+};
+
 struct mmc_card;
 struct mmc_async_req;
 

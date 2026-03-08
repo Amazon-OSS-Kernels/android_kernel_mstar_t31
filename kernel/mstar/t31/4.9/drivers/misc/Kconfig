@@ -362,13 +362,6 @@ config SENSORS_TSL2540
           This driver can also be built as a module.  If so, the module
           will be called tsl2540.
 
-config SENSORS_SC1233A
-        tristate "SOCIONEXT SC1233A motion_sensor"
-        depends on I2C && SYSFS
-        default n
-        help
-          Say Y here if you want to build a driver for Socionext SC1233A.
-
 config SENSORS_BH1770
          tristate "BH1770GLC / SFH7770 combined ALS - Proximity sensor"
          depends on I2C
@@ -837,4 +830,5 @@ source "drivers/misc/mic/Kconfig"
 source "drivers/misc/genwqe/Kconfig"
 source "drivers/misc/echo/Kconfig"
 source "drivers/misc/cxl/Kconfig"
+source "drivers/misc/presence/Kconfig"
 endmenu

@@ -13,6 +13,7 @@
 
 EXTRA_CFLAGS      +=  -Idrivers/mstar2/include
 subdir-ccflags-y += -I$(srctree)/drivers/mstar2/drv/hifi4dsp/
+subdir-ccflags-y += -I$(srctree)/drivers/mstar2/drv/hifi4dsp/hifi4dsp_audio_ipi/common/framework
 
 obj-$(CONFIG_MTK_HIFI4DSP_SUPPORT) += hifi4dsp_spi/
 obj-$(CONFIG_MTK_HIFI4DSP_SUPPORT) += hifi4dsp_load/

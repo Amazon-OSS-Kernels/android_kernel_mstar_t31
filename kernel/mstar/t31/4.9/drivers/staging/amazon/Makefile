@@ -4,6 +4,7 @@ ccflags-y		+= -Idrivers/mstar2/hal/$(CONFIG_MSTAR_CHIP_NAME)/gpio/
 ccflags-y		+= -Idrivers/mstar2/drv/mspi/
 ccflags-y		+= -Idrivers/mstar2/hal/$(CONFIG_MSTAR_CHIP_NAME)/mspi/
 
+obj-$(CONFIG_AMAZON_DSP_FRAMEWORK)      += dspframework/
 obj-$(CONFIG_AMAZON_SIGN_OF_LIFE)       += sign_of_life.o
 obj-$(CONFIG_AMAZON_SIGN_OF_LIFE_MSTAR) += sign_of_life_mstar.o
 obj-$(CONFIG_AMAZON_METRICS_LOG)        += amazon_logger.o

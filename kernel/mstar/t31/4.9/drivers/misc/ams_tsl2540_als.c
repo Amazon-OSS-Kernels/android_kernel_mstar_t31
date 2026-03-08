@@ -18,19 +18,13 @@
 #include <linux/input.h>
 #include <linux/i2c.h>
 #include <linux/slab.h>
+#include <linux/delay.h>
 
 #include <linux/i2c/ams_tsl2540.h>
 #include "ams_i2c.h"
 
-//#undef LUX_DBG
-
-// #define LUX_DBG                          1
-#define CONFIG_AMZN_AMS_ALS              1
-
-#define GAIN1	       (0x00)
-#define GAIN4	       (0x01)
-#define GAIN16	       (0x02)
-#define GAIN64	       (0x03)
+//#define LUX_DBG             1
+#define CONFIG_AMZN_AMS_ALS   1
 
 #define GAIN_CFG2_HALF (0x00)
 #define GAIN_CFG2      (0x04)
@@ -42,6 +36,7 @@ static u8 const als_gains[] = {
 	16,
 	64,
 };
+
 
 static u8 const restorable_als_regs[] = {
 	TSL2540_REG_ATIME,
@@ -76,6 +71,15 @@ static int tsl2540_flush_als_regs(struct tsl2540_chip *chip)
 int tsl2540_read_als(struct tsl2540_chip *chip)
 {
 	int ret;
+        //u8 tmp_gain;
+
+        // the VIS and IR readback is alway one integration cycle delay, try to read gain register
+	// to see if this will help as told by other project.
+
+	//ams_i2c_read(chip->client, TSL2540_REG_CFG1, &tmp_gain);
+	//ams_i2c_read(chip->client, TSL2540_REG_CFG2, &tmp_gain);
+
+	//tmp_gain = tmp_gain;// supress warning
 
 	ret = ams_i2c_blk_read(chip->client, TSL2540_REG_CH0DATA,
 			&chip->shadow[TSL2540_REG_CH0DATA], 4 * sizeof(u8));
@@ -91,45 +95,6 @@ int tsl2540_read_als(struct tsl2540_chip *chip)
 	return ret;
 }
 
-#if 0
-static void tsl2540_calc_lux_coef(struct tsl2540_chip *chip)
-{
-	struct tsl2540_lux_segment *pls = &chip->params.lux_segment;
-
-	chip->als_inf.lux1_ch0_coef = chip->params.d_factor * pls[0].ch0_coef;
-	chip->als_inf.lux1_ch1_coef = chip->params.d_factor * pls[0].ch1_coef;
-	chip->als_inf.lux2_ch0_coef = chip->params.d_factor * pls[1].ch0_coef;
-	chip->als_inf.lux2_ch1_coef = chip->params.d_factor * pls[1].ch1_coef;
-}
-
-static void tsl2540_calc_cpl(struct tsl2540_chip *chip)
-{
-	u32 cpl;
-	u32 sat;
-	u8 atime;
-
-	atime = chip->shadow[TSL2540_REG_ATIME];
-
-	cpl = atime;
-	cpl *= INTEGRATION_CYCLE;
-	cpl *= als_gains[(chip->shadow[TSL2540_REG_CFG1] & TSL2540_MASK_AGAIN)];
-
-	if (chip->shadow[TSL2540_REG_CFG2] & TSL2540_MASK_AGAINMAX)
-		cpl = cpl << 1;
-	else if (chip->shadow[TSL2540_REG_CFG2] & TSL2540_MASK_AGAINL)
-		cpl = cpl >> 1;
-
-	if (chip->params.d_factor > 0)
-		cpl /= chip->params.d_factor;
-
-	sat = min_t(u32, TSL2540_MAX_ALS_VALUE, (u32) atime << 10);
-	sat = sat * 8 / 10;
-
-	chip->als_inf.cpl = cpl * 1000;
-	chip->als_inf.saturation = sat;
-}
-#endif
-
 int tsl2540_configure_als_mode(struct tsl2540_chip *chip, u8 state)
 {
 	struct i2c_client *client = chip->client;
@@ -137,10 +102,7 @@ int tsl2540_configure_als_mode(struct tsl2540_chip *chip, u8 state)
 
 	 /* Turning on ALS */
 	if (state) {
-		//tsl2540_calc_lux_coef(chip);
-
 		chip->shadow[TSL2540_REG_ATIME] = chip->params.als_time;
-		//tsl2540_calc_cpl(chip);
 
 		/* set PERS.apers to 2 consecutive ALS values out of range */
 		chip->shadow[TSL2540_REG_PERS] &= (~TSL2540_MASK_APERS);
@@ -177,41 +139,41 @@ int tsl2540_configure_als_mode(struct tsl2540_chip *chip, u8 state)
 
 static int tsl2540_set_als_gain(struct tsl2540_chip *chip, int gain)
 {
-	int rc;
-	u8 cfg1_reg, cfg2_reg, total;
+	int rc, inte_cycle = 0;
+	u8 cfg1_reg, cfg2_reg;
 	u8 saved_enable;
 
 	switch (gain) {
-	case 0: //1/2
-	     cfg1_reg = GAIN1;
+	case 0: // 0.5
+	     cfg1_reg = AGAIN_1;
              cfg2_reg = GAIN_CFG2_HALF;
-	     total = 0;
+             chip->als_inf.full_gain = 0;
              break;
 	case 1:
-		cfg1_reg = AGAIN_1;
-                cfg2_reg = GAIN_CFG2;
-		total = 1;
-		break;
+	     cfg1_reg = AGAIN_1;
+             cfg2_reg = GAIN_CFG2;
+             chip->als_inf.full_gain = 1;
+             break;
 	case 4:
-		cfg1_reg = AGAIN_4;
-		cfg2_reg = GAIN_CFG2;
-		total = 4;
-		break;
+             cfg1_reg = AGAIN_4;
+	     cfg2_reg = GAIN_CFG2;
+             chip->als_inf.full_gain = 4;
+             break;
 	case 16:
-		cfg1_reg = AGAIN_16;
-		cfg2_reg = GAIN_CFG2;
-		total = 16;
-		break;
+	     cfg1_reg = AGAIN_16;
+	     cfg2_reg = GAIN_CFG2;
+             chip->als_inf.full_gain = 16;
+	     break;
 	case 64:
-		cfg1_reg = AGAIN_64;
-		cfg2_reg =GAIN_CFG2;
-		total = 64;
-		break;
+	     cfg1_reg = AGAIN_64;
+	     cfg2_reg =GAIN_CFG2;
+             chip->als_inf.full_gain = 64;
+ 	     break;
 	case 128:
-		cfg1_reg = AGAIN_64;
-		cfg2_reg = GAIN_CFG2_128;
-		total = 128;
-		break;
+	     cfg1_reg = AGAIN_64;
+	     cfg2_reg = GAIN_CFG2_128;
+             chip->als_inf.full_gain = 128;
+	     break;
 	default:
 		dev_err(&chip->client->dev, "%s: wrong als gain %d\n",
 				__func__, gain);
@@ -225,74 +187,111 @@ static int tsl2540_set_als_gain(struct tsl2540_chip *chip, int gain)
 	 */
 	ams_i2c_read(chip->client, TSL2540_REG_ENABLE, &saved_enable);
 	ams_i2c_write(chip->client, chip->shadow, TSL2540_REG_ENABLE, 0);
-	rc = ams_i2c_modify(chip->client, chip->shadow, TSL2540_REG_CFG1,
-			TSL2540_MASK_AGAIN, cfg1_reg);
-	if (rc >= 0)
-	    rc = ams_i2c_modify(chip->client, chip->shadow, TSL2540_REG_CFG2,
-	  		        (TSL2540_MASK_AGAINL | TSL2540_MASK_AGAINMAX), cfg2_reg);
 
-	ams_i2c_write(chip->client, chip->shadow, TSL2540_REG_ENABLE,
-			saved_enable);
+	ams_i2c_modify(chip->client, chip->shadow, TSL2540_REG_CFG1,TSL2540_MASK_AGAIN, cfg1_reg);
+	ams_i2c_modify(chip->client, chip->shadow, TSL2540_REG_CFG2, (TSL2540_MASK_AGAINL | TSL2540_MASK_AGAINMAX), cfg2_reg);
 
-	if (rc >= 0) {
-		chip->params.als_gain = chip->shadow[TSL2540_REG_CFG1];
-		if (total == 0)
-		    dev_info(&chip->client->dev, "%s: new als gain is 1/2\n",
-				__func__);
-		else
-		    dev_info(&chip->client->dev, "%s: new als gain is %d\n",
-				    __func__, total);
-	}
+	ams_i2c_write(chip->client, chip->shadow, TSL2540_REG_ENABLE, saved_enable);
+
+	chip->params.als_gain = chip->shadow[TSL2540_REG_CFG1];
+	ams_i2c_read(chip->client, TSL2540_REG_STATUS, &saved_enable); //clear and discard int
+	if ( chip->als_inf.full_gain  == 0 )
+            dev_info(&chip->client->dev, "%s: new als gain is 0.5.\n", __func__);
+	else
+	    dev_info(&chip->client->dev, "%s: new als gain is %d\n", __func__, chip->als_inf.full_gain);
+
+	//need to wait for one integration cycle afater a gain changing
+	inte_cycle = chip->shadow[TSL2540_REG_ATIME] + 1;
+	inte_cycle *= INTEGRATION_CYCLE;
+	inte_cycle += 500; //rounding
+	inte_cycle /= 1000; //to ms
+        msleep(inte_cycle);
 
 	return rc;
 }
 
-static void tsl2540_inc_gain(struct tsl2540_chip *chip)
+static int tsl2540_inc_gain(struct tsl2540_chip *chip)
 {
-	int rc;
-	u8 gain = (chip->shadow[TSL2540_REG_CFG1] & TSL2540_MASK_AGAIN);
-	u8 cfg2 = (chip->shadow[TSL2540_REG_CFG2] & (TSL2540_MASK_AGAINL | TSL2540_MASK_AGAINL));
+	u8 gain = 0;
 
-	if (gain > GAIN16) {
-            if (cfg2 == 0x14) 
-		return;
-	    else
-	        gain = 128;
+	if ( chip->als_inf.full_gain == 128 ){
+	    //dev_info(&chip->client->dev,"%s: gain is at maxmail 128.\n", __func__);
+	    return 1;
 	}
-	else if (gain < GAIN4)
-	    if (cfg2 == 0)
-		gain = 1;
-	    else
-		gain = als_gains[GAIN4];
-	else if (gain < GAIN16)
-		gain = als_gains[GAIN16];
+	else if (chip->als_inf.full_gain == 64 ) {
+            gain = 128;
+	}
+	else if (chip->als_inf.full_gain == 16 ) {
+            gain = 64;
+	}
+	else if (chip->als_inf.full_gain == 4 ) {
+            gain = 16;
+	}
+	else if (chip->als_inf.full_gain == 1 ) {
+            gain = 4;
+	}
 	else {
-		gain = als_gains[GAIN64];
+            gain = 1;
 	}
-
-	rc = tsl2540_set_als_gain(chip, gain);
+	tsl2540_set_als_gain(chip, gain);
+        tsl2540_flush_als_regs(chip);
+	return 0;
 }
 
-static void tsl2540_dec_gain(struct tsl2540_chip *chip)
+static int tsl2540_dec_gain(struct tsl2540_chip *chip)
 {
-	int rc;
-	u8 gain = (chip->shadow[TSL2540_REG_CFG1] & 0x03);
-	u8 cfg2 = (chip->shadow[TSL2540_REG_CFG2] & (TSL2540_MASK_AGAINL | TSL2540_MASK_AGAINL));
+	u8 gain = 0;
 
-	if (gain == GAIN1){
-            if (cfg2 == 0)
-		return;
-	    else
-		gain = 0;
+	if ( chip->als_inf.full_gain == 0 ){
+	    //dev_info(&chip->client->dev,"%s: gain is at minimal 0.5.\n", __func__);
+	    return 1;
 	}
-	else if (gain > GAIN16)
-		gain = als_gains[GAIN16];
-	else if (gain > GAIN4)
-		gain = als_gains[GAIN4];
-	else
-		gain = als_gains[GAIN1];
+	else if (chip->als_inf.full_gain == 128 ) {
+            gain = 64;
+	}
+	else if (chip->als_inf.full_gain == 64 ) {
+            gain = 16;
+	}
+	else if (chip->als_inf.full_gain == 16 ) {
+            gain = 4;
+	}
+	else if (chip->als_inf.full_gain == 4 ) {
+            gain = 1;
+	}
+	else {
+            gain = 0;
+	}
 
-	rc = tsl2540_set_als_gain(chip, gain);
+	tsl2540_set_als_gain(chip, gain);
+        tsl2540_flush_als_regs(chip);
+	return 0;
+}
+
+static int tsl2540_gain_remapping(struct tsl2540_chip *chip)
+{
+   //als gain register value need to be remapped for
+   //Lux equation, the gain is also scaled by 10 for fixed point
+   //algorithm
+
+   int gain  = 0;
+   if (chip == NULL){
+       pr_err("can't remap gain, chip is NULL!\n");
+       return gain;
+   }
+
+   if ( (chip->params.als_gain == AGAIN_1) && (chip->shadow[TSL2540_REG_CFG2] == 0) )
+        gain = 5; // 0.5
+   else if ( chip->params.als_gain == AGAIN_1 )
+        gain = 10;
+   else if ( chip->params.als_gain == AGAIN_4 )
+        gain = 40;
+   else if ( chip->params.als_gain == AGAIN_16 )
+        gain = 160;
+   else if ( (chip->params.als_gain == AGAIN_64) && (chip->shadow[TSL2540_REG_CFG2] == 0x14) )
+        gain = 1400;
+   else
+        gain = 670;
+   return gain;
 }
 
 static int tsl2540_max_als_value(struct tsl2540_chip *chip)
@@ -300,6 +299,7 @@ static int tsl2540_max_als_value(struct tsl2540_chip *chip)
 	int val;
 
 	val = chip->shadow[TSL2540_REG_ATIME];
+	val++;
 	if (val > 63)
 		val = 0xffff;
 	else
@@ -309,64 +309,71 @@ static int tsl2540_max_als_value(struct tsl2540_chip *chip)
 
 int tsl2540_get_lux(struct tsl2540_chip *chip)
 {
-	long ch0, ch1, lux, visfc, irfc, tmp;
-	int  idx, atime, gain;
+	u16 ch0, ch1, lux;
+        u32 atime, visfc, irfc, ratio;
+	int64_t lux_tmp, coef_visfc, coef_irfc, tmp;
+	int  idx = 0, gain;
+	u8   satu_flag = 0, int_status = 0;
 
 #ifdef CONFIG_AMS_ADJUST_WITH_BASELINE
 	struct tsl2540_i2c_platform_data *pdata = chip->pdata;
 #endif
 
+        chip->is_als_valid = 1;
+	ams_i2c_read(chip->client, TSL2540_REG_STATUS, &chip->shadow[TSL2540_REG_STATUS]);
+	int_status = chip->shadow[TSL2540_REG_STATUS];
+	satu_flag = int_status & TSL2540_ST_ALS_SAT;
+
 	if (pdata->lux400_ch0 == 0 || pdata->lux400_ch1 == 0 ) {
-	    dev_info(&chip->client->dev,"%s: ALS lux400_chx is zero, use prve value.\n", __func__);
+	    dev_err_ratelimited(&chip->client->dev,"%s: AMB is not calibrated, can't calculate lux value.\n", __func__);
 	    return 0;
 	}
-	ch0 = chip->als_inf.als_ch0;
-	ch1 = chip->als_inf.als_ch1;
+	ch0 = (u32)chip->als_inf.als_ch0;
+	ch1 = (u32)chip->als_inf.als_ch1;
 
-	visfc = ch0 * chip->params.als_tvis / pdata->lux400_ch0; //calibration data
-	irfc  = ch1 * chip->params.als_tir  / pdata->lux400_ch1;
-
+	/* tvis and tir are multipled by 10000 */
+	lux_tmp  = (uint64_t)ch0 * (uint64_t)chip->params.als_tvis / (uint64_t)pdata->lux400_ch0; //calibration data
+	visfc    = (u32)lux_tmp;
+	lux_tmp  = (uint64_t)ch1 * (uint64_t)chip->params.als_tir / (uint64_t)pdata->lux400_ch1;
+	irfc     = (u32)lux_tmp;
+#ifdef LUX_DBG
+	dev_info(&chip->client->dev,"%s: visfc is: %d, irfc is: %d.\n", __func__, visfc, irfc);
+#endif
 	if ( visfc > 0 ) {
-	    tmp = 1000 * irfc / visfc;
-            if (tmp < chip->params.als_edge1 )
+	    tmp = (int64_t)irfc * 1000 / (int64_t)visfc;
+            ratio = (u32)tmp;
+            if (ratio < chip->params.als_edge1 )
                 idx = 0;
-	    else if (tmp < chip->params.als_edge2 )
+	    else if (ratio < chip->params.als_edge2 )
 	        idx = 1;
 	    else
 	        idx = 2;
 
-	    //FIXME  added a scale factor of 5.19 to make the reading more accurate before
-	    //change the equation after HVT
-	    atime = (chip->params.als_time + 1)*281;
-	    if ( (chip->params.als_gain == AGAIN_1) && (chip->shadow[TSL2540_REG_CFG2] == 0) )
-	        gain = 5; //1/2
-	    else if ( chip->params.als_gain == AGAIN_1 )
-	        gain = 10;
-	    else if ( chip->params.als_gain == AGAIN_4 )
-	        gain = 40;
-	    else if ( chip->params.als_gain == AGAIN_16 )
-	        gain = 160;
-	    else if ( (chip->params.als_gain == AGAIN_64) && (chip->shadow[TSL2540_REG_CFG2] == 0x14) )
-	        gain = 1400;
-	    else
-	        gain = 670;
+	    // this is the final lux eqaution change dated 3/21 for old ABM. No need to scale down the lux value
+	    // the reading is accurate based on the simulatoin using HVT data.
+	    atime = (chip->params.als_time + 1)*INTEGRATION_CYCLE;
+	    gain =  tsl2540_gain_remapping(chip);
             if ( atime > 0 ) {
-	        lux = chip->params.lux_segment[idx].dgf * (( chip->params.lux_segment[idx].ch0_coef * visfc ) +
-	              (chip->params.lux_segment[idx].ch1_coef * irfc))/(atime * gain);
-	        lux = lux / 51900;
+		coef_visfc = (int64_t)chip->params.lux_segment[idx].ch0_coef * (int64_t)visfc;
+	        coef_irfc  = (int64_t)chip->params.lux_segment[idx].ch1_coef * (int64_t)irfc;
+		lux_tmp    = (coef_visfc + coef_irfc) / (int64_t)atime;
+		lux_tmp    = lux_tmp * (int64_t)chip->params.lux_segment[idx].dgf / (int64_t)gain;
+                lux_tmp = (lux_tmp + 5000000000) / 10000000000;
+	        lux = (u16)(lux_tmp);
+#ifdef LUX_DBG
+	        dev_info(&chip->client->dev,"%s: coef_visfc : %lld, coef_irfc: %lld, lux_tmp: %lld, gain: %d, lux: %d.\n", __func__, coef_visfc, coef_irfc, lux_tmp, gain, lux);
+#endif
 	    }
 	    else{
-	        dev_info(&chip->client->dev,"%s: ALS atime is zero, use prve value.\n", __func__);
+	        dev_err_ratelimited(&chip->client->dev,"%s: ALS atime is zero, use prve value.\n", __func__);
 	        lux = chip->als_inf.lux;
 	    }
 	}
-	else 
+	else
            lux = 0;
-
-
 #ifdef LUX_DBG
 	dev_info(&chip->client->dev,
-		"%s: lux:%ld [%ld, %ld, %ld, %ld] %u [%u %d %u] [%u %u] %u [%u, ((%u*%u)\n",
+		"%s: lux:%d [%d, %d, %d, %d] %u [%u %d %u] [%u %u] %u [%u, ((%u*%u)\n",
 		__func__, lux,
 		ch0, ch1, visfc, irfc,
 		chip->params.als_time,
@@ -381,32 +388,131 @@ int tsl2540_get_lux(struct tsl2540_chip *chip)
 		chip->als_inf.saturation);
 #endif /* #ifdef LUX_DBG */
        if (lux < 0) {
-          dev_info(&chip->client->dev, "%s: lux < 0 use prev.\n", __func__);
-          return 0; /* use previous value */
+	  chip->als_inf.lux = 0;
+	  chip->is_als_valid = 0;
+	  dev_err_ratelimited(&chip->client->dev, "%s: lux < 0, lux:%d [%d, %d, %d, %d] %u [%u %d %u] [%u %u] %u [%u, ((%u*%u)\n",
+		__func__, lux,
+		ch0, ch1, visfc, irfc,
+		chip->params.als_time,
+		chip->params.lux_segment[idx].ch0_coef,
+		chip->params.lux_segment[idx].ch1_coef,
+		chip->params.lux_segment[idx].dgf,
+		chip->params.als_tvis,
+		chip->params.als_tir,
+		chip->shadow[TSL2540_REG_ATIME],
+		als_gains[(chip->params.als_gain & TSL2540_MASK_AGAIN)],
+		INTEGRATION_CYCLE,
+		chip->als_inf.saturation);
+   	  return 1;
         }
 
-	chip->als_inf.lux = (int)lux;
+	chip->als_inf.lux = (u16)lux;
 
+	/* ..... Not in Autogain ........... */
 	if (!chip->als_gain_auto) {
-		if (ch0 <= TSL2540_MIN_ALS_VALUE)
-			pr_debug("%s: darkness (%d <= %d)\n", __func__,
-				(int)ch0, TSL2540_MIN_ALS_VALUE);
-		else if (ch0 >= chip->als_inf.saturation)
-			pr_debug("%s: saturation (%d >= %d\n", __func__,
-				(int)ch0, chip->als_inf.saturation);
-	} else {
-		if (ch0 < 100) {
-			pr_debug("%s: AUTOGAIN INC\n", __func__);
-			tsl2540_inc_gain(chip);
-			tsl2540_flush_als_regs(chip);
-		} else if (ch0 > tsl2540_max_als_value(chip)) {
-			pr_debug("%s: AUTOGAIN DEC\n", __func__);
-			tsl2540_dec_gain(chip);
-			tsl2540_flush_als_regs(chip);
+		if ((ch0 <= TSL2540_MIN_ALS_VALUE) ||
+		    (ch1 <= TSL2540_MIN_ALS_VALUE)) {
+			chip->als_inf.lux = 0;
+                        dev_info_ratelimited(&chip->client->dev, "%s: ch0 or ch1 is too lowe, lux value invalid.\n", __func__);
+			return 1;
 		}
+		if ((ch0 >= chip->als_inf.saturation) ||
+                    (ch1 >= chip->als_inf.saturation) || 
+		    (satu_flag)) {
+                        dev_info_ratelimited(&chip->client->dev, "%s: ch0 or ch1 is saturated to the maximal value, or the corner case happend, lux invalid.\n", __func__);
+			chip->als_inf.lux = 65535;
+			chip->is_als_valid = 0;
+			return 1;
+		}
+		return 0;
+	}
+	/* ..... In Autogain ..........*/
+        /* in case the ASTA bit is set while the raw counts are low and in the range
+	 * to increase the gain. This will cause a loop between ASTA is set and gain needs to be
+	 * decreased and then increased agian due to the raw count reading is low
+	 * the mitigation is to reduce the high or low threshold so that after the gain is lowered by one
+	 * step, it will not cause a gain increase. The hight or low threshold will set back after the other
+	 * gain increase by non SATA reason. Both methods are tested working but it looks lower the
+	 * high threshold is better.
+	 */
+
+	/* method one, lower the high threshold */
+        if (satu_flag) {
+	   if ((ch0 < chip->als_inf.saturation) && (ch1 < chip->als_inf.saturation)){
+		if (chip->als_inf.als_ch0 > chip->als_inf.als_ch1)
+	            chip->als_inf.high_thrs = 9 * (u32)chip->als_inf.als_ch0 / 40;
+		else
+	            chip->als_inf.high_thrs = 9 * (u32)chip->als_inf.als_ch1 / 40;
+	   }
+	   if ( 1 == tsl2540_dec_gain(chip) ){
+               chip->als_inf.lux = 65534; //gain is at minimal
+               dev_info_ratelimited(&chip->client->dev, "%s: ASTA is still set 0x%02x even the gain is at minimal %d.\n",
+				    __func__,  int_status, chip->params.als_gain);
+	       return 1;
+	   }
+           chip->is_als_valid = 0;
+	   return 0;
+	}
+        if ((ch0 < chip->als_inf.low_thrs && (ch1 < chip->als_inf.high_thrs)) ||
+	    (ch1 < chip->als_inf.low_thrs && (ch0 < chip->als_inf.high_thrs))) {
+	   chip->als_inf.high_thrs = chip->als_inf.saturation / 4;
+           if (1 == tsl2540_inc_gain(chip))
+	      return 1; //gain is at maximal can't be moved up
+	   chip->is_als_valid = 0;
+	   return 0;
+	}
+        if ((ch0 > chip->als_inf.saturation) || (ch1 > chip->als_inf.saturation)) {
+	   chip->is_als_valid = 0;
+	   chip->als_inf.high_thrs = chip->als_inf.saturation / 4;
+	   if ( 1 == tsl2540_dec_gain(chip)){
+               chip->als_inf.lux = 65535; //gain is at minimal
+	       chip->is_als_valid = 1;
+               dev_info_ratelimited(&chip->client->dev, "%s: ch0 or ch1 still saturated %d at lowest gain %d, lux invalid.\n",
+				    __func__, chip->als_inf.saturation, chip->params.als_gain);
+	       return 1;
+	   }
 	}
 
-	return 1; //used in intterupt mode to adjust threshold
+	/* method one, lower the high threshold */
+	/***************
+	if ( satu_flag ) {
+	   if ((ch0 < chip->als_inf.saturation) && (ch1 < chip->als_inf.saturation)){
+	       chip->als_inf.low_thrs /= 2;
+	   }
+	   if ( 1 == tsl2540_dec_gain(chip) ){
+               chip->als_inf.lux = 65534; //gain is at minimal
+               dev_info_ratelimited(&chip->client->dev, "%s: ASTA is still set 0x%02x even the gain is at minimal %d.\n",
+				    __func__,  int_status, chip->params.als_gain);
+	       return 1;
+	   }
+           chip->is_als_valid = 0;
+	   return 0;
+	}
+
+       	if ((ch0 < chip->als_inf.low_thrs && (ch1 < chip->als_inf.high_thrs)) ||
+	    (ch1 < chip->als_inf.low_thrs && (ch0 < chip->als_inf.high_thrs))) {
+	   chip->als_inf.high_thrs *= 2;
+	   if (chip->als_inf.low_thrs > (tsl2540_max_als_value(chip) / 200))
+	       chip->als_inf.low_thrs = tsl2540_max_als_value(chip) / 200;
+           if (1 == tsl2540_inc_gain(chip))
+	      return 1; //gain is at maximal can't be moved up
+	   chip->is_als_valid = 0;
+	   return 0;
+	}
+
+	if ((ch0 > chip->als_inf.saturation) || (ch1 > chip->als_inf.saturation)) {
+	   chip->is_als_valid = 0;
+	   chip->als_inf.low_thrs = tsl2540_max_als_value(chip) / 200;
+	   if ( 1 == tsl2540_dec_gain(chip)){
+               chip->als_inf.lux = 65535; //gain is at minimal
+	       chip->is_als_valid = 1;
+               dev_info_ratelimited(&chip->client->dev, "%s: ch0 or ch1 still saturated %d at lowest gain %d, lux invalid.\n",
+				    __func__, chip->als_inf.saturation, chip->params.als_gain);
+	       return 1;
+	   }
+	}
+	********************/
+	return 0; //used in intterupt mode to adjust threshold
 }
 
 int tsl2540_update_als_thres(struct tsl2540_chip *chip, bool on_enable)
@@ -477,13 +583,28 @@ void tsl2540_report_als(struct tsl2540_chip *chip)
 static ssize_t tsl2540_device_als_lux(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
+	int idx = 0;
 	struct tsl2540_chip *chip = dev_get_drvdata(dev);
 
 	AMS_MUTEX_LOCK(&chip->lock);
-
-	tsl2540_read_als(chip);
-	tsl2540_get_lux(chip);
-
+	//lux value can be invalid and in this case
+	//gain need to be adjusted and then recaculate the lux
+	//if an valid lux can't be obtained then return
+	//65535 or the maximal LUX
+	if (!chip->als_gain_auto) {
+	    tsl2540_read_als(chip);
+	    tsl2540_get_lux(chip);
+	}
+	else {
+	    for (idx = 0; idx < 10; idx++) {
+	        tsl2540_read_als(chip);
+	        tsl2540_get_lux(chip);
+	        if (chip->is_als_valid)
+		    break;
+	        if (chip->als_inf.lux == 65535)
+		   break;
+	   }
+	}
 	AMS_MUTEX_UNLOCK(&chip->lock);
 
 	return snprintf(buf, PAGE_SIZE, "%d\n", chip->als_inf.lux);
@@ -526,8 +647,6 @@ static ssize_t tsl2540_lux_table_store(struct device *dev,
 	chip->params.lux_segment[d_factor].ch0_coef = ch0_coef1;
 	chip->params.lux_segment[d_factor].ch1_coef = ch1_coef1;
 	chip->params.lux_segment[d_factor].dgf = dgf;
-
-	//tsl2540_calc_lux_coef(chip);
 
 	AMS_MUTEX_UNLOCK(&chip->lock);
 	return size;
@@ -636,7 +755,6 @@ static ssize_t tsl2540_als_gain_store(struct device *dev,
 	AMS_MUTEX_LOCK(&chip->lock);
 
 	rc = tsl2540_set_als_gain(chip, gain);
-	//tsl2540_flush_als_regs(chip);
 
 	AMS_MUTEX_UNLOCK(&chip->lock);
 
@@ -645,18 +763,6 @@ static ssize_t tsl2540_als_gain_store(struct device *dev,
 
 static DEVICE_ATTR(als_gain, 0644, tsl2540_als_gain_show,
 			tsl2540_als_gain_store);
-
-#if 0
-static ssize_t tsl2540_als_cpl_show(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-	struct tsl2540_chip *chip = dev_get_drvdata(dev);
-
-	return snprintf(buf, PAGE_SIZE, "%d\n", chip->als_inf.cpl);
-}
-
-static DEVICE_ATTR(als_cpl, 0444, tsl2540_als_cpl_show, NULL);
-#endif
 
 static ssize_t tsl2540_als_persist_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
@@ -724,7 +830,8 @@ static ssize_t tsl2540_als_itime_store(struct device *dev,
 	itime--;
 	chip->shadow[TSL2540_REG_ATIME] = (u8) itime;
 	chip->params.als_time = chip->shadow[TSL2540_REG_ATIME];
-	//tsl2540_calc_cpl(chip);
+	//adjust the stautation value
+	chip->als_inf.saturation = ((chip->params.als_time + 1) * 1024 - 1) * 9 /10;
 	tsl2540_flush_als_regs(chip);
 
 	AMS_MUTEX_UNLOCK(&chip->lock);
@@ -834,7 +941,6 @@ static ssize_t tsl2540_als_ch0_show(struct device *dev,
 	struct tsl2540_chip *chip = dev_get_drvdata(dev);
 
 	tsl2540_read_als(chip);
-	tsl2540_get_lux(chip);
 
 	return snprintf(buf, PAGE_SIZE, "%d\n", chip->als_inf.als_ch0);
 }
@@ -847,7 +953,6 @@ static ssize_t tsl2540_als_ch1_show(struct device *dev,
 	struct tsl2540_chip *chip = dev_get_drvdata(dev);
 
 	tsl2540_read_als(chip);
-	tsl2540_get_lux(chip);
 
 	return snprintf(buf, PAGE_SIZE, "%d\n", chip->als_inf.als_ch1);
 }
@@ -891,17 +996,29 @@ static DEVICE_ATTR(als_az_iterations, 0644,
 		tsl2540_als_az_iterations_show,
 		tsl2540_als_az_iterations_store);
 
-#ifdef LUX_DBG
 static ssize_t tsl2540_als_adc_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	struct tsl2540_chip *chip = dev_get_drvdata(dev);
+	int t;
+	u8 tmp;
+        t = chip->shadow[TSL2540_REG_ATIME];
+	t++;
+	t *= INTEGRATION_CYCLE;
 
+        tmp = chip->als_inf.full_gain; //current gain, gain may be changed after calling get_lux.
+
+	tsl2540_read_als(chip);
 	tsl2540_get_lux(chip);
 
-	return snprintf(buf, PAGE_SIZE,
-			"LUX: %d CH0: %d CH1:%d\n", chip->als_inf.lux,
-			chip->als_inf.als_ch0, chip->als_inf.als_ch1);
+	if ( tmp == 0)
+	   return snprintf(buf, PAGE_SIZE,
+			"CH0: %d, CH1: %d, LUX: %d, VALID: %d, ASTA: 0x%02x, GAIN: 0.5, ATIME: %d\n", chip->als_inf.als_ch0,
+			chip->als_inf.als_ch1, chip->als_inf.lux, chip->is_als_valid, chip->shadow[TSL2540_REG_STATUS],t);
+        else
+	   return snprintf(buf, PAGE_SIZE,
+			"CH0: %d, CH1: %d, LUX: %d, VAILD: %d, ASTA: 0x%02x, GAIN: %d, ATIME: %d(us)\n", chip->als_inf.als_ch0,
+			chip->als_inf.als_ch1, chip->als_inf.lux, chip->is_als_valid, chip->shadow[TSL2540_REG_STATUS], tmp, t);
 }
 
 static ssize_t tsl2540_als_adc_store(struct device *dev,
@@ -925,44 +1042,8 @@ static ssize_t tsl2540_als_adc_store(struct device *dev,
 
 static DEVICE_ATTR(als_adc, 0644, tsl2540_als_adc_show,
 			tsl2540_als_adc_store);
-#endif /* #ifdef LUX_DBG */
 
 #ifdef CONFIG_AMZN_AMS_ALS
-#define ALS_MAX_LUX 400
-#define ALS_MIN_LUX 0
-
-#if 0
-static ssize_t als_calibrated_lux_show(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-	struct tsl2540_chip *chip = dev_get_drvdata(dev);
-	struct tsl2540_i2c_platform_data *pdata = chip->pdata;
-	int coeff = pdata->lux400_lux - pdata->lux20_lux;
-	int lux = 0;
-	int calibrated_lux = 0;
-
-	AMS_MUTEX_LOCK(&chip->lock);
-
-	tsl2540_read_als(chip);
-	tsl2540_get_lux(chip);
-
-	AMS_MUTEX_UNLOCK(&chip->lock);
-
-	lux = chip->als_inf.lux - pdata->lux20_lux;
-
-	calibrated_lux = (ALS_MAX_LUX - 20) * lux / coeff + 20;
-
-	if (calibrated_lux > ALS_MAX_LUX)
-		calibrated_lux = ALS_MAX_LUX;
-
-	if (calibrated_lux < ALS_MIN_LUX)
-		calibrated_lux = ALS_MIN_LUX;
-	return snprintf(buf, PAGE_SIZE, "%d\n", calibrated_lux);
-}
-
-static DEVICE_ATTR(als_calibrated_lux, 0444, als_calibrated_lux_show, NULL);
-#endif
-
 static ssize_t als_vis_400_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
@@ -1022,71 +1103,68 @@ static DEVICE_ATTR(als_ir_400, 0644, als_ir_400_show,
 		   als_ir_400_store);
 
 struct tsl2540_chip *ams_chip = NULL; //to be set when driver opens
-//only front sensor is supported for Kayla so the sendor should be set to 0, 
-//mode can be raw, 0 or calibarte 1, channel can be visible 0 or IR 1
+/****
+ *
+ * int als_get_lux_value(int sensor, int mode, int channel)
+ * Paramters:
+ *          sensor, should be set to 0. Only front sensor is supported now.
+ *          mode,   1 for read raw channel data, or 0 to read calibrated lux value
+ *          channel, if mode is 1 then this one can be 0 for VIS channel or 1 for IR channel
+ *          returns VIR or IR channel counts (if mode = 0) or lux value
+ *
+ */
+
 int als_get_lux_value(int sensor, int mode, int channel){
-    struct tsl2540_i2c_platform_data *pdata = NULL;
     int lux = 0;
 
     if (ams_chip == NULL) {
-	printk("als driver is not initalized properly, unable to read the als data\n");
+        pr_err("als driver is not initialized. Exit!\n");
         return -1;
     }
     if (sensor != 0){
-	printk("only front sensor is supported als\n");
+	dev_err(&ams_chip->client->dev, "%s: only front sensor is supported.\n", __func__);
 	return -1;
     }
 
-    if (mode == 0) {//calibrated value
-       if ( channel == 0 ) {//visable channel
-	   pdata = ams_chip->pdata;
-	   //coeff = pdata->lux400_lux - pdata->lux20_lux;
-
-	   AMS_MUTEX_LOCK(&ams_chip->lock);
-	   tsl2540_read_als(ams_chip);
-	   tsl2540_get_lux(ams_chip);
-	   AMS_MUTEX_UNLOCK(&ams_chip->lock);
-
-	   lux = ams_chip->als_inf.lux;
-	   //calibrated_lux = (ALS_MAX_LUX - 20) * lux / coeff + 20;
-
-	   //if (calibrated_lux > ALS_MAX_LUX)
-		//calibrated_lux = ALS_MAX_LUX;
-
-	   //if (calibrated_lux < ALS_MIN_LUX)
-	//	calibrated_lux = ALS_MIN_LUX;
-
-	   return lux;
-       }
-       else {
-	       return ams_chip->shadow[TSL2540_REG_AZ_CONFIG];
-       } 
+    if (mode == 1) {
+	AMS_MUTEX_LOCK(&ams_chip->lock);
+	tsl2540_read_als(ams_chip);
+	tsl2540_get_lux(ams_chip);
+	AMS_MUTEX_UNLOCK(&ams_chip->lock);
+	lux = ams_chip->als_inf.lux;
+	return lux;
     }
     else {
        //raw data
-       if ( channel == 0 ) {//visable channel
-	   pdata = ams_chip->pdata;
-	   //coeff = pdata->lux400_lux - pdata->lux20_lux;
-
-	   AMS_MUTEX_LOCK(&ams_chip->lock);
-	   tsl2540_read_als(ams_chip);
-	   tsl2540_get_lux(ams_chip);
-	   AMS_MUTEX_UNLOCK(&ams_chip->lock);
-	   lux = ams_chip->als_inf.lux;
-	   return lux;
-       }
-       else {
-	       return ams_chip->shadow[TSL2540_REG_AZ_CONFIG];
-       } 
+       AMS_MUTEX_LOCK(&ams_chip->lock);
+       tsl2540_read_als(ams_chip);
+       AMS_MUTEX_UNLOCK(&ams_chip->lock);
+       if ( channel == 0)
+	    return ams_chip->als_inf.als_ch0;
+       else
+	    return ams_chip->als_inf.als_ch1;
     }
-    printk("unsiupported paramters to get als data\n");
+    dev_err(&ams_chip->client->dev, "%s: unsupported parameters.\n", __func__);
     return -1;
 }
 
+static ssize_t tsl2540_als_valid_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct tsl2540_chip *chip = dev_get_drvdata(dev);
+	int count;
+
+	AMS_MUTEX_LOCK(&chip->lock);
+	count =  snprintf(buf, PAGE_SIZE, "%d\n", chip->is_als_valid);
+	AMS_MUTEX_UNLOCK(&chip->lock);
+	return count;
+}
+
+static DEVICE_ATTR(als_valid, 0440, tsl2540_als_valid_show, NULL);
+
 EXPORT_SYMBOL(ams_chip);
 EXPORT_SYMBOL(als_get_lux_value);
-
-#endif
+#endif //CONFIG_AMZN_AMS_ALS
 
 static struct attribute *tsl2540_als_attributes[] = {
 	&dev_attr_als_itime.attr,
@@ -1094,7 +1172,6 @@ static struct attribute *tsl2540_als_attributes[] = {
 	&dev_attr_als_lux.attr,
 	&dev_attr_als_gain.attr,
 	&dev_attr_als_az_iterations.attr,
-	//&dev_attr_als_cpl.attr,
 	&dev_attr_als_thresh_deltap.attr,
 	&dev_attr_als_auto_gain.attr,
 	&dev_attr_als_lux_table.attr,
@@ -1102,14 +1179,12 @@ static struct attribute *tsl2540_als_attributes[] = {
 	&dev_attr_als_persist.attr,
 	&dev_attr_als_ch0.attr,
 	&dev_attr_als_ch1.attr,
+	&dev_attr_als_valid.attr,
 #ifdef CONFIG_AMZN_AMS_ALS
-	//&dev_attr_als_calibrated_lux.attr,
 	&dev_attr_als_vis_400.attr,
 	&dev_attr_als_ir_400.attr,
 #endif
-#ifdef LUX_DBG
 	&dev_attr_als_adc.attr,
-#endif /* #ifdef LUX_DBG */
 	NULL
 };
 

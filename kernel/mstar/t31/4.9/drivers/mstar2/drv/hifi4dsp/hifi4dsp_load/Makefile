@@ -15,6 +15,8 @@ EXTRA_CFLAGS      +=  -Idrivers/mstar2/include
 
 ccflags-y += \
 	-I$(srctree)/drivers/mstar2/drv/hifi4dsp/hifi4dsp_ipi/mt8570
+ccflags-$(CONFIG_AMAZON_DSP_FRAMEWORK) += \
+	-I$(srctree)/drivers/staging/amazon/dspframework/include
 
 obj-$(CONFIG_MTK_HIFI4DSP_SUPPORT) += hifi4dsp_load.o
 obj-$(CONFIG_MTK_HIFI4DSP_SUPPORT) += hifi4dsp_mtcmos.o

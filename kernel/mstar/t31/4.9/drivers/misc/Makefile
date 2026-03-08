@@ -2,10 +2,6 @@
 # Makefile for misc devices that really don't fit anywhere else.
 #
 
-ccflags-y		+= -Idrivers/mstar2/include
-ccflags-y		+= -Idrivers/mstar2/drv/gpio/
-ccflags-y		+= -Idrivers/mstar2/hal/$(CONFIG_MSTAR_CHIP_NAME)/gpio/
-
 obj-$(CONFIG_IBM_ASM)		+= ibmasm/
 obj-$(CONFIG_AD525X_DPOT)	+= ad525x_dpot.o
 obj-$(CONFIG_AD525X_DPOT_I2C)	+= ad525x_dpot-i2c.o
@@ -33,9 +29,9 @@ obj-$(CONFIG_APDS9802ALS)	+= apds9802als.o
 obj-$(CONFIG_ISL29003)		+= isl29003.o
 obj-$(CONFIG_ISL29020)		+= isl29020.o
 obj-$(CONFIG_SENSORS_TSL2550)	+= tsl2550.o
-obj-$(CONFIG_SENSORS_TSL2540)	+= ams_tsl2540.o ams_tsl2540_als.o ams_i2c.o
 ifeq ($(TARGET_PRODUCT), $(filter $(TARGET_PRODUCT), brandenburg anna))
-obj-$(CONFIG_SENSORS_SC1233A)	+= sinext_sc1233a.o
+obj-$(CONFIG_SENSORS_TSL2540)	+= ams_tsl2540.o ams_tsl2540_als.o ams_i2c.o
+obj-$(CONFIG_SENSORS_SC1233A)	+= presence/
 endif
 obj-$(CONFIG_DS1682)		+= ds1682.o
 obj-$(CONFIG_TI_DAC7512)	+= ti_dac7512.o

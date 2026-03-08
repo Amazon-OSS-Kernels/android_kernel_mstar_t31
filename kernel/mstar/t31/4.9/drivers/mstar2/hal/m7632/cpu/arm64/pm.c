@@ -441,8 +441,11 @@ void mstar_str_power_off(void)
 {
     SerPrintf("\nMStar STR waiting power off...[%d]\n", MDrv_MPM_Get_Cnt(MDRV_MPM_KEY_STR_CNT));
 #ifdef CONFIG_AMZ_MISC
-	if (!strcmp(idme_get_product_name(), "brandenburg"))
-		MDrv_GPIO_Set_Low(14);  //Pull GPIO9_PM pin to shutdown PSU
+	if (!strcmp(idme_get_product_name(), "brandenburg")|| !strcmp(idme_get_product_name(), "anna"))
+	{
+		pr_info("Pull GPIO9_PM to low\n");
+		MDrv_GPIO_Set_Low(14);  //Pull GPI9_PM pin to shutdown PSU
+	}
 #endif
     if (MDrv_MPM_Check_DC())
     {

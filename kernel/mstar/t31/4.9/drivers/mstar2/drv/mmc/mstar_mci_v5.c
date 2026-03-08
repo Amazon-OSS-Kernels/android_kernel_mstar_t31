@@ -2470,6 +2470,18 @@ static u32 mstar_mci_read_blocks(struct mmc_host *host, u8 *buf, ulong blkaddr, 
 
 #endif
 
+static void mstar_mci_mmc_hw_reset(struct mmc_host *pMMCHost_st)
+{
+	eMMC_LockFCIE((U8*)__FUNCTION__);
+
+	eMMC_RST_L();  eMMC_hw_timer_sleep(1);
+	eMMC_RST_H();  eMMC_hw_timer_sleep(1);
+
+	eMMC_FCIE_Init();
+
+	eMMC_UnlockFCIE((U8*)__FUNCTION__);
+}
+
 static int mstar_mci_card_busy(struct mmc_host *pMMCHost_st)
 {
 	U16 u16_read0, u16_read1;
@@ -3094,6 +3106,7 @@ static const struct mmc_host_ops sg_mstar_mci_ops =
     .set_ios        = mstar_mci_set_ios,
     .execute_tuning = mstar_mci_execute_tuning,
 	.card_busy      = mstar_mci_card_busy,
+	.hw_reset       = mstar_mci_mmc_hw_reset,
 };
 
 #ifdef CONFIG_MP_MSTAR_STR_OF_ORDER
@@ -3229,7 +3242,7 @@ static s32 mstar_mci_probe(struct platform_device *pDev_st)
     #if defined(ENABLE_EMMC_PRE_DEFINED_BLK) && ENABLE_EMMC_PRE_DEFINED_BLK
     pMMCHost_st->caps           |= MMC_CAP_CMD23;
     #endif
-	pMMCHost_st->caps           |= MMC_CAP_WAIT_WHILE_BUSY;
+	pMMCHost_st->caps           |= MMC_CAP_WAIT_WHILE_BUSY|MMC_CAP_HW_RESET;
 
     #if (defined(ENABLE_eMMC_ATOP)&&ENABLE_eMMC_ATOP)
 
@@ -3610,7 +3623,8 @@ static s32 __init mstar_mci_init(void)
 		eMMC_debug(eMMC_DEBUG_LEVEL_ERROR,1,"eMMC Err: platform_device_register fail, %Xh\n", err);
 
 
-	mci_workqueue = create_workqueue("mstar_mci");
+	mci_workqueue =  alloc_workqueue("mstar_mci", WQ_HIGHPRI | WQ_MEM_RECLAIM, 1);
+
 	if (!mci_workqueue) {
 		pr_err("mstar_mci: not enough memory to create workqueue\n");
 		return -ENOMEM;

@@ -12,4 +12,7 @@
 #
 EXTRA_CFLAGS      +=  -Idrivers/mstar2/include
 
+ccflags-$(CONFIG_AMAZON_DSP_FRAMEWORK) += \
+    -I$(srctree)/drivers/staging/amazon/dspframework/include
+
 obj-$(CONFIG_MTK_HIFI4DSP_SUPPORT) += hifi4dsp_wdt.o

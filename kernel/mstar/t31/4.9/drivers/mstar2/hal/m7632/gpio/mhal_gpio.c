@@ -1346,6 +1346,7 @@ static void (*_PMGPIOCallback[PM_INT_COUNT])(void);
 static irq_handler_t pm_gpio_irq(int irq, void *data)
 {
     U8 i;
+	bool is_irq_trigger = false;
     for(i=0; i < PM_INT_COUNT; i++)
     {
         if(MHal_GPIO_ReadRegBit((PM_gpio_IRQreg[i]+0x1),BIT_PM_GPIO_INT_FINAL_STATUS))
@@ -1355,9 +1356,14 @@ static irq_handler_t pm_gpio_irq(int irq, void *data)
 			if (_PMGPIOCallback[i])
 				(_PMGPIOCallback[i])();
             MHal_GPIO_WriteRegBit(PM_gpio_IRQreg[i], 0,  BIT_PM_GPIO_INT_MASK);
+			is_irq_trigger = true;
         }
     }
-   return IRQ_HANDLED;
+
+	if (is_irq_trigger)
+		return IRQ_HANDLED;
+	else
+		return IRQ_NONE;
 }
 #endif
 
@@ -1652,9 +1658,9 @@ int MHal_GPIO_Enable_Interrupt(int gpio_num, unsigned long gpio_edge_type, irq_h
                printk("Trigger Type not support\n");
                return -1;
             }
-            if(request_irq(E_IRQEXPL_PM_IRQ, (irq_handler_t)pm_gpio_irq, 0x0, "GPIO_PM", dev_id))
+			if (request_irq(E_IRQ_PM_SLEEP, (irq_handler_t)pm_gpio_irq, IRQF_SHARED, "GPIO_PM", dev_id))
             {
-                printk("request_irq fail\n");
+				printk("[%s]request_irq fail\n", __FUNCTION__);
                 return -EBUSY;
             }
             MHal_GPIO_Pad_Odn(gpio_num);

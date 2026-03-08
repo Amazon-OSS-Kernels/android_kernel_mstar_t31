@@ -164,10 +164,9 @@ int MHal_RTC_Request_IRQ(irq_handler_t pCallback, void *dev_id)
 
     pm_rtc_irq_pCallback = pCallback;
 
-//CONFIG_MTK_HIFI4DSP_SUPPORT//
-    if (request_irq(E_IRQ_PM_SLEEP, (irq_handler_t)_MHAL_RTCINT_INTHandler, IRQF_TRIGGER_RISING | IRQF_SHARED, "RTC_PM", dev_id))
+    if (request_irq(E_IRQ_PM_SLEEP, (irq_handler_t)_MHAL_RTCINT_INTHandler, IRQF_SHARED, "RTC_PM", dev_id))
     {
-        printk("request_irq fail\n");
+		printk("[%s]request_irq fail\n", __FUNCTION__);
         return -EBUSY;
     }
 

@@ -396,9 +396,19 @@ void eMMC_Prepare_Power_Saving_Mode_Queue(void)
     REG_FCIE_W(GET_REG_ADDR(FCIE_POWEER_SAVE_MODE_BASE, 0x1F),
                PWR_BAT_CLASS | PWR_RST_CLASS | PWR_CMD_WINT);
 
-    /* (17) STOP */
+    /* (17) Clear All interrupt enable */
     REG_FCIE_W(GET_REG_ADDR(FCIE_POWEER_SAVE_MODE_BASE, 0x20), 0x0000);
     REG_FCIE_W(GET_REG_ADDR(FCIE_POWEER_SAVE_MODE_BASE, 0x21),
+               PWR_BAT_CLASS | PWR_RST_CLASS | PWR_CMD_WREG | PWR_CMD_BK0 | 0x01);
+
+    /* (18) Clear All event  (should put after clear all interrupt enable)*/
+    REG_FCIE_W(GET_REG_ADDR(FCIE_POWEER_SAVE_MODE_BASE, 0x22), 0xffff);
+    REG_FCIE_W(GET_REG_ADDR(FCIE_POWEER_SAVE_MODE_BASE, 0x23),
+               PWR_BAT_CLASS | PWR_RST_CLASS | PWR_CMD_WREG | PWR_CMD_BK0 | 0x00);
+
+    /* (19) STOP */
+    REG_FCIE_W(GET_REG_ADDR(FCIE_POWEER_SAVE_MODE_BASE, 0x24), 0x0000);
+    REG_FCIE_W(GET_REG_ADDR(FCIE_POWEER_SAVE_MODE_BASE, 0x25),
                PWR_BAT_CLASS | PWR_RST_CLASS | PWR_CMD_STOP);
 
     REG_FCIE_CLRBIT(FCIE_PWR_SAVE_CTL, BIT_SD_POWER_SAVE_RST);
@@ -1324,28 +1334,34 @@ irqreturn_t eMMC_FCIE_IRQ(int irq, void *dummy)
 
     if(u16_Events & BIT_POWER_SAVE_MODE_INT)
     {
-        eMMC_debug(eMMC_DEBUG_LEVEL_ERROR,1, "SAR5 eMMC WARN: %Xh \n",
-            REG_FCIE(FCIE_PWR_SAVE_CTL));
-
+        while(1)
+        {
+            // disable power saving mode to avoid HW keeping trigger
+            REG_FCIE_W(FCIE_PWR_SAVE_CTL, BIT_SD_POWER_SAVE_RST);
+            // clear the CMD0 status by power-saving mode to make foreground thread wait event timeout
+            if((REG_FCIE(FCIE_PWR_SAVE_CTL) & BIT_SD_POWER_SAVE_RST) == BIT_SD_POWER_SAVE_RST &&
+                (REG_FCIE(FCIE_PWR_SAVE_CTL) & BIT_POWER_SAVE_MODE) == 0)
+                break;
+        }
         // reset FCIE power-saving mode
         REG_FCIE_CLRBIT(FCIE_PWR_SAVE_CTL, BIT_SD_POWER_SAVE_RST); /* active low */
-        eMMC_hw_timer_delay(HW_TIMER_DELAY_1s);
+        eMMC_hw_timer_delay(2*HW_TIMER_DELAY_100ms);
         REG_FCIE_SETBIT(FCIE_PWR_SAVE_CTL, BIT_SD_POWER_SAVE_RST);
-
-        // clear the CMD0 status by power-saving mode
-        REG_FCIE_CLRBIT(FCIE_MIE_INT_EN, BIT_CMD_END);
-        REG_FCIE_W(FCIE_MIE_EVENT, BIT_ALL_CARD_INT_EVENTS);
 
         REG_FCIE_SETBIT(FCIE_PWR_SAVE_CTL, BIT_POWER_SAVE_MODE_INT); //W1C
         REG_FCIE_SETBIT(FCIE_PWR_SAVE_CTL, BIT_POWER_SAVE_MODE_INT_EN);
         REG_FCIE_CLRBIT(FCIE_PWR_SAVE_CTL, BIT_POWER_SAVE_MODE_INT_EN);
         //printk("xx %Xh \n", REG_FCIE(FCIE_PWR_SAVE_CTL));
 
-        // reset FCIE
+       // reset FCIE
         REG_FCIE_CLRBIT(FCIE_RST, BIT_FCIE_SOFT_RST_n); /* active low */
+        eMMC_hw_timer_delay(HW_TIMER_DELAY_1ms);
         REG_FCIE_SETBIT(FCIE_RST, BIT_FCIE_SOFT_RST_n);
-        eMMC_hw_timer_delay(HW_TIMER_DELAY_1s);
-        //panic("\n");
+
+        eMMC_debug(eMMC_DEBUG_LEVEL_ERROR,1, "SAR5 eMMC WARN: %Xh \n",
+             u16_Events);
+        eMMC_hw_timer_delay(2*HW_TIMER_DELAY_100ms);
+        panic("Low Voltage Reset:  SAR5 level under 0.8V\n");
         wake_up(&fcie_wait);
 
         return IRQ_HANDLED;

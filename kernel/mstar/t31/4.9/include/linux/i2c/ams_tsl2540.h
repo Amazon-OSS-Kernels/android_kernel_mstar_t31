@@ -176,7 +176,7 @@ enum tsl2540_ctrl_reg {
 #define OUTDOOR_LUX_TRIGGER	10000
 #define TSL2540_MAX_LUX		0xffff
 #define TSL2540_MAX_ALS_VALUE	0xffff
-#define TSL2540_MIN_ALS_VALUE	10
+#define TSL2540_MIN_ALS_VALUE	1
 
 struct tsl2540_lux_segment {
 	u32 ch0_coef;
@@ -206,6 +206,10 @@ struct tsl2540_als_info {
 	u32 lux2_ch1_coef;
 	u32 saturation;
 	u16 lux;
+	u32 low_thrs;
+	u32 high_thrs;
+	u16 stack_id;
+	u8  full_gain;
 };
 
 struct tsl2540_chip {
@@ -232,6 +236,7 @@ struct tsl2540_chip {
 	bool prx_enabled;
 	bool amscalcomplete;
 	bool amsindoormode;
+	bool is_als_valid;
 
 	u8 device_index;
 };

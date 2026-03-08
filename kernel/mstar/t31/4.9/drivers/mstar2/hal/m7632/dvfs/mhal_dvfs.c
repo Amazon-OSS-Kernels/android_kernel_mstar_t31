@@ -176,7 +176,6 @@ static struct platform_device mstar_dvfs_dev =
 #define OVER_TEMP_THERMAL_REPORT_INTERVAL_MINS 5
 #define METRICS_BUF_SIZE 512
 static struct timespec last_reported_time;
-static struct timespec curr_time;
 #endif
 
 static void temp_log_metrics(S32 temperature, U32 mode, U8 type)
@@ -217,7 +216,7 @@ static void temp_log_metrics(S32 temperature, U32 mode, U8 type)
 static void log_thermal_event(const int temp, const unsigned int interval)
 {
 #if defined(CONFIG_AMAZON_METRICS_LOG)
-   struct timespec delta_time;
+   struct timespec delta_time, curr_time;
    char buf[METRICS_BUF_SIZE];
    getnstimeofday(&curr_time);
    delta_time = timespec_sub(curr_time, last_reported_time);
@@ -680,6 +679,7 @@ void MDrvHalDvfsInit(void)
         MHalDvfsCpuPowerInit(i);
         MHalDvfsCorePowerInit(i);
     }
+    getnstimeofday(&last_reported_time);
 }
 //=================================================================================================
 U32 MHalDvfsGetCpuFreq(U8 dwCpu)
@@ -1367,7 +1367,6 @@ U32 MHalDvfsQueryCpuClockByTemperature(U8 dwCpu)
     {
         if(hMstarDvfsInfo[dwCluster].bDvfsModeChange == 1)
         {
-            //goto _MHalDvfsQueryCpuClockByTemperatureExit;
             DVFS_HAL_DEBUG("\033[1;31m[DVFS] bDvfsModeChange==1\033[0m\n");
         }
 
@@ -1618,7 +1617,6 @@ U32 MHalDvfsQueryCpuClockByTemperature(U8 dwCpu)
         }
     }
 
-_MHalDvfsQueryCpuClockByTemperatureExit:
     DVFS_HAL_DEBUG("[DVFS] Current DVFS State: %d\n", (unsigned int) DvfsRegInfo->dvfs_reg[dwCluster].reg_cur_dvfs_state);
     {
       char data[25];
@@ -1628,15 +1626,14 @@ _MHalDvfsQueryCpuClockByTemperatureExit:
            || CONFIG_DVFS_OVER_TEMPERATURE_MODE == DvfsRegInfo->dvfs_reg[dwCluster].reg_cur_dvfs_state);
 
       if (stateChanged && stateWatched) {
-          int thermalStateValue = (CONFIG_DVFS_NORMAL_MODE == DvfsRegInfo->dvfs_reg[dwCluster].reg_cur_dvfs_state) ? 0 : 1;
-          pre_dvfs_state = DvfsRegInfo->dvfs_reg[dwCluster].reg_cur_dvfs_state;
-          snprintf(data, sizeof(data), "THERMAL_STATE=%d", thermalStateValue);
-          kobject_uevent_env(&mstar_dvfs_dev.dev.kobj, KOBJ_CHANGE, envp);
-          pr_debug("[DVFS] DVFS Thermal State change (%d)\n", thermalStateValue);
+	  int thermalStateValue = (CONFIG_DVFS_NORMAL_MODE == DvfsRegInfo->dvfs_reg[dwCluster].reg_cur_dvfs_state) ? 0 : 1;
+	  pre_dvfs_state = DvfsRegInfo->dvfs_reg[dwCluster].reg_cur_dvfs_state;
+	  snprintf(data, sizeof(data), "THERMAL_STATE=%d", thermalStateValue);
+	  kobject_uevent_env(&mstar_dvfs_dev.dev.kobj, KOBJ_CHANGE, envp);
+	  pr_debug("[DVFS] DVFS Thermal State change (%d)\n", thermalStateValue);
+          temp_log_metrics(hMstarDvfsInfo[dwCluster].dwCpuTemperature, prev_mode, 0);
+	  prev_mode = pre_dvfs_state;
       }
-
-      temp_log_metrics(hMstarDvfsInfo[dwCluster].dwCpuTemperature, prev_mode, 0);
-      prev_mode = pre_dvfs_state;
     }
 
     DVFS_HAL_DEBUG("[DVFS] Current DVFS State: %d\n", (unsigned int) DvfsRegInfo->dvfs_reg[dwCluster].reg_cur_dvfs_state);

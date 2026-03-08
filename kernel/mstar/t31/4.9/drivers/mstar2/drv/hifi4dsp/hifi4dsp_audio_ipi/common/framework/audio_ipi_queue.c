@@ -597,8 +597,8 @@ static int process_message_in_queue(
 			memset(p_ack, 0, sizeof(struct ipi_msg_t));
 			retval = -1;
 			/*if (audio_opendsp_ready(p_ipi_msg->task_scene) == true)
-				WARN_ON(1);
-			break;*/
+				WARN_ON(1);*/
+			break;
 		}
 
 		/* should be in pair */

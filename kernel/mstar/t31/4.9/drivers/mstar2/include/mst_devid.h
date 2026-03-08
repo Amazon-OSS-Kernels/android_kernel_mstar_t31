@@ -342,4 +342,8 @@
 #define MDRV_NAME_ALS                  "als"
 #define MDRV_MAJOR_ALS                 0xc6
 #define MDRV_MINOR_ALS                 0x00
+
+#define MDRV_NAME_AAB                  "aab"
+#define MDRV_MAJOR_AAB                 0xc7
+#define MDRV_MINOR_AAB                 0x00
 #endif // __DEV_ID_H__

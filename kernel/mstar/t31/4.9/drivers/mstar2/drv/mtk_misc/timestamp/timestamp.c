@@ -169,7 +169,7 @@ static int store_timestamp(struct file *file, const char *buffer,
 	spin_lock(&rtimestamp_lock);
 	if (_u4TimeStampSize >= MAX_SW_TIMESTAMP_SIZE) {
 		spin_unlock(&rtimestamp_lock);
-		pr_err("_u4TimeStampSize exceed maximum size %d\n", MAX_SW_TIMESTAMP_SIZE);
+		//pr_err("_u4TimeStampSize exceed maximum size %d\n", MAX_SW_TIMESTAMP_SIZE);
 		kfree(buf);
 		kfree(nbuf);
 		return -ENOMEM;
@@ -216,7 +216,7 @@ void add_timestamp(char *buffer)
 	spin_lock(&rtimestamp_lock);
 	if (_u4TimeStampSize >= MAX_SW_TIMESTAMP_SIZE) {
 		spin_unlock(&rtimestamp_lock);
-		pr_err("_u4TimeStampSize exceed maximum size %d\n", MAX_SW_TIMESTAMP_SIZE);
+		//pr_err("_u4TimeStampSize exceed maximum size %d\n", MAX_SW_TIMESTAMP_SIZE);
 		kfree(buf);
 		kfree(nbuf);
 		return;

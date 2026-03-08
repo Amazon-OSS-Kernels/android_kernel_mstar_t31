@@ -2520,6 +2520,7 @@ static void load_hifi4dsp_callback(void *arg)
 		return;
 	}
 
+#ifndef CONFIG_AMAZON_DSP_FRAMEWORK
 	for (i = 0; i < ARRAY_SIZE(init_tasks); i++) {
 		mt8518_adsp_send_ipi_cmd(NULL,
 			init_tasks[i].scene,
@@ -2537,6 +2538,7 @@ static void load_hifi4dsp_callback(void *arg)
 	}
 
 	mt8518_update_mem_infos(priv);
+#endif
 
 #if defined(CONFIG_SND_SOC_MT8518_ADSP_PCM_PLAYBACK) || \
 	defined(CONFIG_SND_SOC_COMPRESS)
