@@ -143,7 +143,7 @@ static UINT_8 aucDbModuleName[][PROC_DBG_LEVEL_MAX_DISPLAY_STR_LEN] = {
 	"INIT", "HAL", "INTR", "REQ", "TX", "RX", "RFTEST", "EMU", "SW1", "SW2",
 	"SW3", "SW4", "HEM", "AIS", "RLM", "MEM", "CNM", "RSN", "BSS", "SCN",
 	"SAA", "AAA", "P2P", "QM", "SEC", "BOW", "WAPI", "ROAMING", "TDLS", "PF",
-	"OID", "NIC"
+	"OID", "NIC", "WNM"
 };
 
 /* This u32 is only for DriverCmdRead/Write, should not be used by other function */
@@ -1068,7 +1068,7 @@ static ssize_t procMCRRead(struct file *filp, char __user *buf, size_t count, lo
 {
 	uint8_t *pucProcBuf = kalMemZAlloc(PROC_MAX_BUF_SIZE, VIR_MEM_TYPE);
 	P_GLUE_INFO_T prGlueInfo;
-	PARAM_CUSTOM_MCR_RW_STRUCT_T rMcrInfo;
+	PARAM_CUSTOM_MCR_RW_STRUCT_T rMcrInfo = {0};
 	UINT_32 u4BufLen;
 	uint32_t u4CopySize = 0;
 	UINT_8 *temp = NULL;

@@ -1246,16 +1246,18 @@ VOID qmDetermineStaRecIndex(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInf
 			/* 4 <2> Check if an AP STA is present */
 			prTempStaRec = prBssInfo->prStaRecOfAP;
 
-			DBGLOG(QM, LOUD,
-			       "StaOfAp Idx[%u] WIDX[%u] Valid[%u] TxAllowed[%u] InUse[%u] Type[%u]\n",
-			       prTempStaRec->ucIndex, prTempStaRec->ucWlanIndex,
-			       prTempStaRec->fgIsValid, prTempStaRec->fgIsTxAllowed,
-			       prTempStaRec->fgIsInUse, prTempStaRec->eStaType);
+			if (prTempStaRec) {
+				DBGLOG(QM, LOUD,
+					"StaOfAp Idx[%u] WIDX[%u] Valid[%u] TxAllowed[%u] InUse[%u] Type[%u]\n",
+					prTempStaRec->ucIndex, prTempStaRec->ucWlanIndex,
+					prTempStaRec->fgIsValid, prTempStaRec->fgIsTxAllowed,
+					prTempStaRec->fgIsInUse, prTempStaRec->eStaType);
 
-			if (prTempStaRec->fgIsInUse) {
-				prMsduInfo->ucStaRecIndex = prTempStaRec->ucIndex;
-				DBGLOG(QM, LOUD, "TX with AP_STA[%u]\n", prTempStaRec->ucIndex);
-				return;
+				if (prTempStaRec->fgIsInUse) {
+					prMsduInfo->ucStaRecIndex = prTempStaRec->ucIndex;
+					DBGLOG(QM, LOUD, "TX with AP_STA[%u]\n", prTempStaRec->ucIndex);
+					return;
+				}
 			}
 		}
 		break;
@@ -5203,6 +5205,11 @@ VOID mqmProcessScanResult(IN P_ADAPTER_T prAdapter, IN P_BSS_DESC_T prScanResult
 #if CFG_SUPPORT_TDLS
 			TdlsBssExtCapParse(prStaRec, pucIE);
 #endif /* CFG_SUPPORT_TDLS */
+#if CFG_SUPPORT_802_11V_BSS_TRANSITION_MGT
+			prStaRec->fgSupportBTM =
+				!!((*(PUINT_32)(pucIE + 2)) &
+			BIT(ELEM_EXT_CAP_BSS_TRANSITION_BIT));
+#endif
 			break;
 
 		case ELEM_ID_WMM:
@@ -5394,16 +5401,22 @@ VOID mqmGenerateWmmInfoIE(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo)
 	DEBUGFUNC("mqmGenerateWmmInfoIE");
 
 	ASSERT(prMsduInfo);
+	/* in case assert didn't take effect */
+	if (prMsduInfo == NULL) {
+		DBGLOG(QM, ERROR, "prMsduInfo is NULL\n");
+		return;
+	}
 
 	/* In case QoS is not turned off, exit directly */
 	if (IS_FEATURE_DISABLED(prAdapter->rWifiVar.ucQoS))
 		return;
 
 	prStaRec = cnmGetStaRecByIndex(prAdapter, prMsduInfo->ucStaRecIndex);
-	ASSERT(prStaRec);
-
-	if (prStaRec == NULL)
+	if (prStaRec == NULL) {
+		DBGLOG(QM, ERROR, "prStaRec of ucStaRecIndex %d is NULL!\n",
+			prMsduInfo->ucStaRecIndex);
 		return;
+	}
 
 	if (!prStaRec->fgIsWmmSupported)
 		return;
