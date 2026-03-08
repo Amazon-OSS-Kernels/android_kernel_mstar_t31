@@ -20,3 +20,4 @@
 - [Amazon Fire TV Smart TV - Pioneer 4K UHD](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/pioneer_4k_uhd/amazonfiretvedition_4k_uhd-7.6.4.6-20230601)
 - [Fire TV 2 Series](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/2-series/fire_tv_2_series-7.6.3.0-20230405)
 - [Fire TV 4 Series](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/4-series/fire_tv_4_series-7.6.3.0-20230405)
+- [Fire TV Omni QLED Series 43", 50", 55"](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/omni_qled_series_43_50_55/fire_tv_omni_qled_series-7.6.3.0-20230405)
