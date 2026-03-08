@@ -311,8 +311,9 @@ static int mstar_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alarm)
 
 static int mstar_rtc_proc(struct device *dev, struct seq_file *seq)
 {
-    printk_ratelimited(KERN_INFO "mstar-rtc %s: currently not supported\n", __func__);
-    return -1;
+    printk(KERN_INFO "mstar-rtc %s: currently not supported\n", __func__);
+
+    return 0;
 }
 
 static const struct rtc_class_ops mstar_rtc_ops = {

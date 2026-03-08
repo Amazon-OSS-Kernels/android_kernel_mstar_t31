@@ -162,10 +162,6 @@ static void get_wakeup_reason(void)
 			pr_info("System is woken up by CUSTOM_4 key \n");
 			sprintf(power_on_src_name, "%s", "app_4");
 			break;
-                case 0xA4:
-                        pr_info("System is woken up by customized BUTTON_1 key \n");
-                        sprintf(power_on_src_name, "%s", "BUTTON_1");
-                        break;
                 case 0xA5:
                         pr_info("System is woken up by HULU/BUTTON_2 key \n");
                         sprintf(power_on_src_name, "%s", "BUTTON_2");

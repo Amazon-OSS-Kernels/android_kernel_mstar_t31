@@ -115,10 +115,7 @@ struct mma_buf_handle {
 	int ref; //reference count
 	int global_name;
     void* kvaddr;
-	pid_t pid;
-	pid_t tgid;
-	pid_t map_pid;
-	char comm[TASK_COMM_LEN];
+	pid_t tpid;
     u32 serial;
     u32 alloc_time_ms;
     u32 pipe_id;
