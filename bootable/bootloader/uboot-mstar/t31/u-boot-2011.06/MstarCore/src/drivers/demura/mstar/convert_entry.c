@@ -135,6 +135,22 @@ MS_BOOL Alloc_LutIn_Space(void *pdat_info, BinOutputInfo *pbin_info)
         {
             pDataInfo->Lut_in[idx] = NULL;   // Init to NULL value
         }
+    #elif (defined (CONFIG_DEMURA_M7622) || defined (CONFIG_DEMURA_M7632))    // Morton case
+        int n_Layer     = level_count > 0 ? level_count : 8;
+        int layer_size  = sizeof(strgb_structInfo) * nTotalNode;
+        interface_info *pDataInfo = (interface_info *)pdat_info;
+
+        int idx;
+        for (idx = 0; idx < n_Layer; idx++)
+        {
+            char *pLut_in  = (char *)dmalloc(layer_size);
+            CHECK_DMALLOC_SPACE(pLut_in, layer_size);
+            pDataInfo->Lut_in[idx] = (strgb_structInfo *)pLut_in;
+        }
+        for (idx = n_Layer; idx < 8; idx++)
+        {
+            pDataInfo->Lut_in[idx] = NULL;   // Init to NULL value
+        }
 
     #endif
     return TRUE;
@@ -153,7 +169,7 @@ int do_demura_convert(BinOutputInfo *pbin_info)
     }
 
     UBOOT_DEBUG("\n=======================================\n");
-    UBOOT_DEBUG("DEMURA_URSA_TYPE : U%s\n", CONFIG_DEMURA_URSA_STRING);
+    UBOOT_DEBUG("DEMURA_URSA_TYPE : %s\n", CONFIG_DEMURA_URSA_STRING);
     UBOOT_DEBUG("DEMURA_VENDOR    : %s\n",  CONFIG_DEMURA_VENDOR_STRING);
     UBOOT_DEBUG("=======================================\n");
 
@@ -168,6 +184,8 @@ int do_demura_convert(BinOutputInfo *pbin_info)
     #if defined (CONFIG_DEMURA_URSA11)
         interface_info DataInfo[3];
     #elif defined (CONFIG_DEMURA_URSA13)
+        interface_info DataInfo;
+    #elif (defined (CONFIG_DEMURA_M7622) || defined (CONFIG_DEMURA_M7632))
         interface_info DataInfo;
     #else
         #error "Unkown DEMURA_URSA_TYPE !"
