@@ -177,6 +177,9 @@
 ********************************************************************************
 */
 
+#define SA_QUERY_RETRY_TIMEOUT	3000
+#define SA_QUERY_TIMEOUT	501
+
 /*******************************************************************************
 *                           P R I V A T E   D A T A
 ********************************************************************************
@@ -274,6 +277,11 @@ VOID rsnGenerateWSCIEForAssocRsp(P_ADAPTER_T prAdapter, P_MSDU_INFO_T prMsduInfo
 #if CFG_SUPPORT_OWE
 void rsnGenerateOWEIE(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo);
 UINT_32 rsnCalOweIELen(IN P_ADAPTER_T prAdapter, IN UINT_8 ucBssIndex, P_STA_RECORD_T prStaRec);
+#endif
+
+#if CFG_SUPPORT_H2E
+void rsnGenerateRSNXE(IN P_ADAPTER_T prAdapter,	IN OUT P_MSDU_INFO_T prMsduInfo);
+uint32_t rsnCalRSNXELen(IN P_ADAPTER_T prAdapter,	IN uint8_t ucBssIndex, P_STA_RECORD_T prStaRec);
 #endif
 
 /*******************************************************************************

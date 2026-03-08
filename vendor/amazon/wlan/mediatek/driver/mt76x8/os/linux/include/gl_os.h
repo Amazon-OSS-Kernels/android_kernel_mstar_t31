@@ -536,10 +536,6 @@ struct _GLUE_INFO_T {
 	/*! \brief wext wpa related information */
 	GL_WPA_INFO_T rWpaInfo;
 
-#if CFG_SUPPORT_REPLAY_DETECTION
-	struct SEC_DETECT_REPLAY_INFO prDetRplyInfo;
-#endif
-
 	/* Pointer to ADAPTER_T - main data structure of internal protocol stack */
 	P_ADAPTER_T prAdapter;
 

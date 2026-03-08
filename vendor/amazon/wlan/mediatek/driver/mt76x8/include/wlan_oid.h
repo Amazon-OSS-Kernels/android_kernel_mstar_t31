@@ -2960,6 +2960,8 @@ wlanoidGetTemperature(P_ADAPTER_T prAdapter,
 
 uint32_t wlanGetSupportedFeatureSet(IN P_GLUE_INFO_T prGlueInfo);
 
+WLAN_STATUS wlanSuspendLinkDown(IN P_GLUE_INFO_T prGlueInfo);
+
 /*******************************************************************************
 *                              F U N C T I O N S
 ********************************************************************************

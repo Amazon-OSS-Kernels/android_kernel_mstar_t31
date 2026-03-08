@@ -676,6 +676,7 @@ WLAN_STATUS wlanAdapterStart(IN P_ADAPTER_T prAdapter, IN P_REG_INFO_T prRegInfo
 #if CFG_SUPPORT_LAST_SEC_MCS_INFO
 		prAdapter->fgIsMcsInfoValid = FALSE;
 #endif
+		prAdapter->r1xTxDoneStatus = TX_RESULT_UNINITIALIZED;
 
 	} while (FALSE);
 
@@ -717,6 +718,9 @@ WLAN_STATUS wlanAdapterStop(IN P_ADAPTER_T prAdapter)
 
 	/* Release all CMD/MGMT/SEC frame in command queue */
 	kalClearCommandQueue(prAdapter->prGlueInfo);
+
+	/* Release all CMD in pending command queue */
+	wlanClearPendingCommandQueue(prAdapter);
 
 #if CFG_SUPPORT_MULTITHREAD
 
@@ -1273,6 +1277,10 @@ WLAN_STATUS wlanTxCmdMthread(IN P_ADAPTER_T prAdapter)
 *	UINT_32 u4Address;
 */
 	UINT_32 u4TxDoneQueueSize;
+#if CFG_FTV_62866_PATCH
+	UINT_32 tx_status;
+	UINT_32 tx_retry_cnt = 0;
+#endif
 
 	KAL_SPIN_LOCK_DECLARATION();
 
@@ -1298,6 +1306,34 @@ WLAN_STATUS wlanTxCmdMthread(IN P_ADAPTER_T prAdapter)
 		prCmdInfo = (P_CMD_INFO_T) prQueueEntry;
 		prCmdInfo->pfHifTxCmdDoneCb = wlanTxCmdDoneCb;
 
+#if CFG_FTV_62866_PATCH
+		if(tx_retry_cnt == 0) {
+			if ((!prCmdInfo->fgSetQuery) || (prCmdInfo->fgNeedResp)) {
+				KAL_ACQUIRE_SPIN_LOCK(prAdapter, SPIN_LOCK_CMD_PENDING);
+				QUEUE_INSERT_TAIL(&(prAdapter->rPendingCmdQueue),
+						  (P_QUE_ENTRY_T) prCmdInfo);
+				KAL_RELEASE_SPIN_LOCK(prAdapter, SPIN_LOCK_CMD_PENDING);
+			} else {
+				QUEUE_INSERT_TAIL(prTempCmdDoneQue, prQueueEntry);
+			}
+		}
+		tx_status = nicTxCmd(prAdapter, prCmdInfo, TC4_INDEX);
+		if(tx_retry_cnt < NIC_TX_RESOURCE_POLLING_TIMEOUT) {
+			if(tx_status == WLAN_STATUS_RESOURCES) {
+				tx_retry_cnt++;
+				kalMsleep(NIC_TX_RESOURCE_POLLING_DELAY_MSEC);
+				continue;
+			}
+		}
+		else {
+			P_WIFI_CMD_T prWifiCmd =
+			(P_WIFI_CMD_T) prCmdInfo->pucInfoBuffer;
+			DBGLOG(INIT, ERROR,
+				"RETRY[%d] TX CMD: ID[0x%02X] SEQ[%u] CMD cannot send\n",
+			tx_retry_cnt, prWifiCmd->ucCID, prWifiCmd->ucSeqNum);
+			tx_retry_cnt = 0;
+		}
+#else
 		if ((!prCmdInfo->fgSetQuery) || (prCmdInfo->fgNeedResp)) {
 			KAL_ACQUIRE_SPIN_LOCK(prAdapter, SPIN_LOCK_CMD_PENDING);
 			QUEUE_INSERT_TAIL(&(prAdapter->rPendingCmdQueue), (P_QUE_ENTRY_T) prCmdInfo);
@@ -1307,6 +1343,7 @@ WLAN_STATUS wlanTxCmdMthread(IN P_ADAPTER_T prAdapter)
 		}
 
 		nicTxCmd(prAdapter, prCmdInfo, TC4_INDEX);
+#endif
 
 		/* DBGLOG(INIT, INFO,
 		 * ("==> TX CMD QID: %d (Q:%d)\n", prCmdInfo->ucCID, prTempCmdQue->u4NumElem));
@@ -1314,6 +1351,17 @@ WLAN_STATUS wlanTxCmdMthread(IN P_ADAPTER_T prAdapter)
 
 		GLUE_DEC_REF_CNT(prAdapter->prGlueInfo->i4TxPendingCmdNum);
 		QUEUE_REMOVE_HEAD(prTempCmdQue, prQueueEntry, P_QUE_ENTRY_T);
+
+#if CFG_FTV_62866_PATCH
+		if(tx_retry_cnt) {
+			P_WIFI_CMD_T prWifiCmd =
+			(P_WIFI_CMD_T) prCmdInfo->pucInfoBuffer;
+			DBGLOG(INIT, STATE, "RETRY[%d] TX CMD: ID[0x%02X] SEQ[%u]\n",
+				tx_retry_cnt, prWifiCmd->ucCID, prWifiCmd->ucSeqNum);
+		}
+		tx_retry_cnt = 0;
+#endif
+
 	}
 
 	KAL_ACQUIRE_SPIN_LOCK(prAdapter, SPIN_LOCK_TX_CMD_DONE_QUE);
@@ -1619,6 +1667,48 @@ VOID wlanClearRxToOsQueue(IN P_ADAPTER_T prAdapter)
 
 /*----------------------------------------------------------------------------*/
 /*!
+ * \brief This routine is used to clear all commands in pending command queue
+ * \param prAdapter  Pointer of Adapter Data Structure
+ *
+ * \retval none
+*/
+/*----------------------------------------------------------------------------*/
+void wlanClearPendingCommandQueue(IN P_ADAPTER_T prAdapter)
+{
+    QUE_T rTempCmdQue;
+    P_QUE_T prTempCmdQue = &rTempCmdQue;
+    P_QUE_ENTRY_T prQueueEntry = (P_QUE_ENTRY_T) NULL;
+    P_CMD_INFO_T prCmdInfo = (P_CMD_INFO_T) NULL;
+
+	KAL_SPIN_LOCK_DECLARATION();
+    QUEUE_INITIALIZE(prTempCmdQue);
+
+	ASSERT(prAdapter);
+
+	KAL_ACQUIRE_SPIN_LOCK(prAdapter, SPIN_LOCK_CMD_PENDING);
+
+	QUEUE_MOVE_ALL(prTempCmdQue,&prAdapter->rPendingCmdQueue);
+
+	KAL_RELEASE_SPIN_LOCK(prAdapter, SPIN_LOCK_CMD_PENDING);
+
+	QUEUE_REMOVE_HEAD(prTempCmdQue, prQueueEntry, P_QUE_ENTRY_T);
+
+	while (prQueueEntry) {
+		prCmdInfo = (P_CMD_INFO_T) prQueueEntry;
+
+		if (prCmdInfo->pfCmdTimeoutHandler)
+			prCmdInfo->pfCmdTimeoutHandler(prAdapter, prCmdInfo);
+		else
+			wlanReleaseCommand(prAdapter, prCmdInfo, TX_RESULT_QUEUE_CLEARANCE);
+
+		nicTxCancelSendingCmd(prAdapter, prCmdInfo);
+		cmdBufFreeCmdInfo(prAdapter, prCmdInfo);
+		QUEUE_REMOVE_HEAD(prTempCmdQue, prQueueEntry, P_QUE_ENTRY_T);
+    }
+}
+
+/*----------------------------------------------------------------------------*/
+/*!
  * \brief This function will release thd CMD_INFO upon its attribution
  *
  * \param prAdapter  Pointer of Adapter Data Structure
@@ -1729,7 +1819,7 @@ VOID wlanReleasePendingOid(IN P_ADAPTER_T prAdapter, IN ULONG ulParamPtr)
 			DBGLOG(HAL, ERROR, "fgIsChipNoAck = %d\n",
 						prAdapter->fgIsChipNoAck);
 			if (!checkResetState())
-				glResetTrigger(prAdapter);
+				GL_RESET_TRIGGER(prAdapter, RST_OID_TIMEOUT);
 #endif
 		}
 		set_bit(GLUE_FLAG_HIF_PRT_HIF_DBG_INFO_BIT, &(prAdapter->prGlueInfo->ulFlag));
@@ -2265,7 +2355,7 @@ WLAN_STATUS wlanSendNicPowerCtrlCmd(IN P_ADAPTER_T prAdapter, IN UINT_8 ucPowerM
 #if CFG_CHIP_RESET_SUPPORT
 				DBGLOG(HAL, ERROR, "fgIsChipNoAck = %d\n",
 						prAdapter->fgIsChipNoAck);
-				glResetTrigger(prAdapter);
+				GL_RESET_TRIGGER(prAdapter, RST_DRV_OWN_FAIL);
 #endif
 				break;
 			}
@@ -5513,6 +5603,13 @@ WLAN_STATUS wlanEnqueueTxPacket(IN P_ADAPTER_T prAdapter, IN P_NATIVE_PACKET prN
 					cnmPktFree(prAdapter, prMsduInfo);
 					return WLAN_STATUS_PENDING;
 				}
+
+			prAdapter->r1xTxDoneStatus = TX_RESULT_1XTX_CLEAR;
+			if (prAdapter->fgIsTest1xTx == 1) {
+				DBGLOG(RSN, STATE, "%s: (fgIsTest1xTx == 1) test 1XTX frame skip\n", __func__);
+				cnmPktFree(prAdapter, prMsduInfo);
+				return WLAN_STATUS_SUCCESS;
+			}
 		}
 
 		/* Tx profiling */
@@ -7519,10 +7616,13 @@ WLAN_STATUS wlanCfgGet(IN P_ADAPTER_T prAdapter, const PCHAR pucKey, PCHAR pucVa
 
 	if (prWlanCfgEntry) {
 		kalStrnCpy(pucValue, prWlanCfgEntry->aucValue, WLAN_CFG_VALUE_LEN_MAX - 1);
+		pucValue[WLAN_CFG_KEY_LEN_MAX-1] = '\0';
 		return WLAN_STATUS_SUCCESS;
 	}
-		if (pucValueDef)
+		if (pucValueDef) {
 			kalStrnCpy(pucValue, pucValueDef, WLAN_CFG_VALUE_LEN_MAX - 1);
+			pucValue[WLAN_CFG_KEY_LEN_MAX-1] = '\0';
+		}
 		return WLAN_STATUS_FAILURE;
 
 
@@ -7564,7 +7664,7 @@ UINT_32 wlanCfgGetUint32(IN P_ADAPTER_T prAdapter, const PCHAR pucKey, UINT_32 u
 		u4Ret = kalkStrtou32(prWlanCfgEntry->aucValue, 0, &u4Value);
 		if (u4Ret) {
 			DBGLOG(INIT, LOUD, "parse aucValue error u4Ret=%d\n", u4Ret);
-			return -1;
+			return 0;
 		}
 	}
 
@@ -9036,6 +9136,8 @@ WLAN_STATUS wlan1xTxDone(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo,
 	DBGLOG(SW4, STATE, "1x PKT[0x%08x] WIDX:PID[%u:%u] Status[%u]\n",
 		prMsduInfo->u4TxDoneTag, prMsduInfo->ucWlanIndex, prMsduInfo->ucPID, rTxDoneStatus);
 
+		prAdapter->r1xTxDoneStatus = rTxDoneStatus;
+
 	return WLAN_STATUS_SUCCESS;
 }
 
@@ -9288,11 +9390,9 @@ wlanAddDirtinessToAffectedChannels(P_ADAPTER_T prAdapter,
 	} else if (ucLeftestCoveredChannel > 64 && ucLeftestCoveredChannel <= 100) {
 		ucLeftestCoveredChannel = 100;
 		ucLeftNeighborChannel = 0;
-	} else if (ucLeftestCoveredChannel > 140 && ucLeftestCoveredChannel <= 149) {
+	} else if (ucLeftestCoveredChannel > 144 &&
+		ucLeftestCoveredChannel <= 149) {
 		ucLeftestCoveredChannel = 149;
-		ucLeftNeighborChannel = 0;
-	} else if (ucLeftestCoveredChannel > 173 && ucLeftestCoveredChannel <= 184) {
-		ucLeftestCoveredChannel = 184;
 		ucLeftNeighborChannel = 0;
 	}
 
@@ -9333,11 +9433,12 @@ wlanAddDirtinessToAffectedChannels(P_ADAPTER_T prAdapter,
 	} else if (ucRightestCoveredChannel >= 64 && ucRightestCoveredChannel < 100) {
 		ucRightestCoveredChannel = 64;
 		ucRightNeighborChannel = 0;
-	} else if (ucRightestCoveredChannel >= 140 && ucRightestCoveredChannel < 149) {
-		ucRightestCoveredChannel = 140;
+	} else if (ucRightestCoveredChannel >= 144 &&
+		ucRightestCoveredChannel < 149) {
+		ucRightestCoveredChannel = 144;
 		ucRightNeighborChannel = 0;
-	} else if (ucRightestCoveredChannel >= 173 && ucRightestCoveredChannel < 184) {
-		ucRightestCoveredChannel = 173;
+	} else if (ucRightestCoveredChannel >= 165) {
+		ucRightestCoveredChannel = 165;
 		ucRightNeighborChannel = 0;
 	}
 
@@ -9345,6 +9446,11 @@ wlanAddDirtinessToAffectedChannels(P_ADAPTER_T prAdapter,
 
 	ucStart = wlanGetChannelIndex(ucLeftestCoveredChannel);
 	ucEnd = wlanGetChannelIndex(ucRightestCoveredChannel);
+	if (ucStart >= MAX_CHN_NUM || ucEnd >= MAX_CHN_NUM) {
+		DBGLOG(SCN, ERROR, "Invalid ch idx of start %u, or end %u\n",
+			ucStart, ucEnd);
+		return;
+	}
 
 	for (ucIdx = ucStart; ucIdx <= ucEnd; ucIdx++) {
 		prGetChnLoad->rEachChnLoad[ucIdx].u4Dirtiness += u4Dirtiness;
@@ -9354,33 +9460,56 @@ wlanAddDirtinessToAffectedChannels(P_ADAPTER_T prAdapter,
 
 	if (ucLeftNeighborChannel != 0) {
 		ucIdx = wlanGetChannelIndex(ucLeftNeighborChannel);
-		prGetChnLoad->rEachChnLoad[ucIdx].u4Dirtiness += (u4Dirtiness >> 1);
-		DBGLOG(SCN, TRACE, "Add dirtiness %d, to neighbor ch %d\n",
-			u4Dirtiness >> 1, prGetChnLoad->rEachChnLoad[ucIdx].ucChannel);
+		if (ucIdx < MAX_CHN_NUM) {
+			prGetChnLoad->rEachChnLoad[ucIdx].u4Dirtiness +=
+				(u4Dirtiness >> 1);
+			DBGLOG(SCN, TRACE,
+				"Add dirtiness %d, to neighbor ch %d\n",
+				u4Dirtiness >> 1,
+				prGetChnLoad->rEachChnLoad[ucIdx].ucChannel);
+		}
 	}
 
 	if (ucRightNeighborChannel != 0) {
 		ucIdx = wlanGetChannelIndex(ucRightNeighborChannel);
-		prGetChnLoad->rEachChnLoad[ucIdx].u4Dirtiness += (u4Dirtiness >> 1);
-		DBGLOG(SCN, TRACE, "Add dirtiness %d, to neighbor ch %d\n",
-			u4Dirtiness >> 1, prGetChnLoad->rEachChnLoad[ucIdx].ucChannel);
-	}
-
-	if (!bIs5GChl) {
-		if (ucLeftNeighborChannel2 != 0) {
-			ucIdx = wlanGetChannelIndex(ucLeftNeighborChannel2);
-			prGetChnLoad->rEachChnLoad[ucIdx].u4Dirtiness += (u4Dirtiness >> 1);
-			DBGLOG(SCN, TRACE, "Add dirtiness %d, to neighbor ch %d\n",
-				u4Dirtiness >> 1, prGetChnLoad->rEachChnLoad[ucIdx].ucChannel);
-		}
-
-		if (ucRightNeighborChannel2 != 0) {
-			ucIdx = wlanGetChannelIndex(ucRightNeighborChannel2);
-			prGetChnLoad->rEachChnLoad[ucIdx].u4Dirtiness += (u4Dirtiness >> 1);
-			DBGLOG(SCN, TRACE, "Add dirtiness %d, to neighbor ch %d\n",
-				u4Dirtiness >> 1, prGetChnLoad->rEachChnLoad[ucIdx].ucChannel);
+		if (ucIdx < MAX_CHN_NUM) {
+			prGetChnLoad->rEachChnLoad[ucIdx].u4Dirtiness +=
+				(u4Dirtiness >> 1);
+			DBGLOG(SCN, TRACE,
+				"Add dirtiness %d, to neighbor ch %d\n",
+				u4Dirtiness >> 1,
+				prGetChnLoad->rEachChnLoad[ucIdx].ucChannel);
 		}
 	}
+
+	if (bIs5GChl)
+		return;
+
+	/* Only necesaary for 2.5G */
+	if (ucLeftNeighborChannel2 != 0) {
+		ucIdx = wlanGetChannelIndex(ucLeftNeighborChannel2);
+		if (ucIdx < MAX_CHN_NUM) {
+			prGetChnLoad->rEachChnLoad[ucIdx].u4Dirtiness +=
+				(u4Dirtiness >> 1);
+			DBGLOG(SCN, TRACE,
+				"Add dirtiness %d, to neighbor ch %d\n",
+				u4Dirtiness >> 1,
+				prGetChnLoad->rEachChnLoad[ucIdx].ucChannel);
+		}
+	}
+
+	if (ucRightNeighborChannel2 != 0) {
+		ucIdx = wlanGetChannelIndex(ucRightNeighborChannel2);
+		if (ucIdx < MAX_CHN_NUM) {
+			prGetChnLoad->rEachChnLoad[ucIdx].u4Dirtiness +=
+				(u4Dirtiness >> 1);
+			DBGLOG(SCN, TRACE,
+				"Add dirtiness %d, to neighbor ch %d\n",
+				u4Dirtiness >> 1,
+				prGetChnLoad->rEachChnLoad[ucIdx].ucChannel);
+		}
+	}
+
 }
 
 /*----------------------------------------------------------------------------*/
@@ -9503,20 +9632,16 @@ wlanCalculateAllChannelDirtiness(IN P_ADAPTER_T prAdapter)
 UINT_8
 wlanGetChannelIndex(IN UINT_8 channel)
 {
-	UINT_8 ucIdx = 1;
+	UINT_8 ucIdx = MAX_CHN_NUM - 1;
 
 	if (channel <= 14)
 		ucIdx = channel - 1;
 	else if (channel >= 36 && channel <= 64)
 		ucIdx = 14 + (channel - 36) / 4;
-	else if (channel >= 100 && channel <= 140)
+	else if (channel >= 100 && channel <= 144)
 		ucIdx = 14 + 8 + (channel - 100) / 4;
-	else if (channel >= 149 && channel <= 173)
-		ucIdx = 14 + 8 + 11 + (channel - 149) / 4;
-	else if (channel >= 184 && channel <= 216)
-		ucIdx = 14 + 8 + 11 + 7 + (channel - 184) / 4;
-	else
-		DBGLOG(SCN, ERROR, "Invalid ch %u\n", channel);
+	else if (channel >= 149 && channel <= 165)
+		ucIdx = 14 + 8 + 12 + (channel - 149) / 4;
 
 	return ucIdx;
 }
@@ -9536,10 +9661,8 @@ wlanGetChannelNumFromIndex(IN UINT_8 ucIdx)
 {
 	UINT_8 ucChannel = 0;
 
-	if (ucIdx >= 40)
-		ucChannel = ((ucIdx - 40) << 2) + 184;
-	else if (ucIdx >= 33)
-		ucChannel = ((ucIdx - 33) << 2) + 149;
+	if (ucIdx >= 34)
+		ucChannel = ((ucIdx - 34) << 2) + 149;
 	else if (ucIdx >= 22)
 		ucChannel = ((ucIdx - 22) << 2) + 100;
 	else if (ucIdx >= 14)

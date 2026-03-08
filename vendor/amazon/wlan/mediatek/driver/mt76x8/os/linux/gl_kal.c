@@ -4859,7 +4859,7 @@ BOOLEAN kalSetSdioTestPattern(IN P_GLUE_INFO_T prGlueInfo, IN BOOLEAN fgEn, IN B
 #define PROC_MET_PROF_PORT                 "met_port"
 
 struct proc_dir_entry *pMetProcDir;
-void *pMetGlobalData;
+void *pMetGlobalData = NULL;
 
 #endif
 /*----------------------------------------------------------------------------*/
@@ -4941,10 +4941,14 @@ VOID kalWDevLockThread(IN P_GLUE_INFO_T prGlueInfo,
 
 	DBGLOG(REQ, INFO, "kalWDevLockThread\n");
 
-	pParamWDevLock = (P_PARAM_WDEV_LOCK_THREAD_T) kalMemAlloc(
-							sizeof(PARAM_WDEV_LOCK_THREAD_T),
-							VIR_MEM_TYPE);
-	DBGLOG(REQ, TRACE, "Alloc pParamWDevLock 0x%x\n", pParamWDevLock);
+	if (in_interrupt() && fgIsInterruptContext) {
+		DBGLOG(REQ, STATE, "pParamWDevLock is allocated as PHY_MEM_TYPE in intr context\n");
+		pParamWDevLock =
+			(P_PARAM_WDEV_LOCK_THREAD_T)kalMemAlloc(sizeof(PARAM_WDEV_LOCK_THREAD_T), PHY_MEM_TYPE);
+	} else {
+		pParamWDevLock =
+			(P_PARAM_WDEV_LOCK_THREAD_T)kalMemAlloc(sizeof(PARAM_WDEV_LOCK_THREAD_T), VIR_MEM_TYPE);
+	}
 
 	if (pParamWDevLock == NULL) {
 		DBGLOG(REQ, ERROR, "pParamWDevLock Alloc Failed\n");
@@ -5435,6 +5439,12 @@ int kalMetRemoveProcfs(IN P_GLUE_INFO_T prGlueInfo)
 		DBGLOG(INIT, WARN, "remove proc fs fail: proc_net == NULL\n");
 		return -ENOENT;
 	}
+
+	if (pMetGlobalData == NULL) {
+		DBGLOG(INIT, WARN, "Skip MET remove Procfs due to init was not done\n");
+		return 0;
+	}
+
 	remove_proc_entry(PROC_MET_PROF_CTRL, pMetProcDir);
 	remove_proc_entry(PROC_MET_PROF_PORT, pMetProcDir);
 	/* remove root directory (proc/net/wlan0) */

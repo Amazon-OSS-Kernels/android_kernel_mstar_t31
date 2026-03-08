@@ -246,6 +246,10 @@ typedef struct _CONNECTION_SETTINGS_T {
 	/* for OWE info store, when upper layer set rsn info */
 	struct OWE_INFO_T rOweInfo;
 #endif
+
+#if CFG_SUPPORT_H2E
+	struct RSNXE rRsnXE;
+#endif
 } CONNECTION_SETTINGS_T, *P_CONNECTION_SETTINGS_T;
 
 struct _BSS_INFO_T {
@@ -524,6 +528,12 @@ struct _BSS_INFO_T {
 #endif
 
 	PARAM_POWER_MODE ePowerModeFromUser;
+
+#if CFG_SUPPORT_DFS
+	TIMER_T rCsaTimer;
+	SWITCH_CH_AND_BAND_PARAMS_T CSAParams;
+	UINT_8 fgHasStopTx;
+#endif
 };
 
 struct _AIS_SPECIFIC_BSS_INFO_T {
@@ -1349,6 +1359,7 @@ struct _ADAPTER_T {
 #if CFG_WOW_SUPPORT
 	WOW_CTRL_T	rWowCtrl;
 #endif
+	BOOLEAN fgIsCfg80211SuspendCalled;
 
 /*#if (CFG_EEPROM_PAGE_ACCESS == 1)*/
 	UINT_8 aucEepromVaule[16]; /* HQA CMD for Efuse Block size contents */
@@ -1396,6 +1407,16 @@ struct _ADAPTER_T {
 #endif
 	WIFI_FEM_CFG_T rWifiFemCfg;
 	struct CSI_DATA_T rCsiData;
+
+	ENUM_TX_RESULT_CODE_T r1xTxDoneStatus;
+	/*
+		fgIsTest1xTx
+		= 0 for default and no simulation
+		= 1 for "packet have not sent to queue" simulation
+		= 2 for "packet stuck in queue" simulation
+	*/
+	UINT_8 fgIsTest1xTx;
+
 };				/* end of _ADAPTER_T */
 
 /*******************************************************************************

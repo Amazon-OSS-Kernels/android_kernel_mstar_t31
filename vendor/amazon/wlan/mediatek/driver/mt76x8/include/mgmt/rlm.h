@@ -227,6 +227,21 @@ typedef struct _RLM_CAL_RESULT_ALL_V2_T {
 extern RLM_CAL_RESULT_ALL_V2_T g_rBackupCalDataAllV2;
 #endif
 
+#if CFG_SUPPORT_DFS
+typedef struct _SWITCH_CH_AND_BAND_PARAMS_T {
+	BOOLEAN fgBeaconNewChannelIsDFS;
+	BOOLEAN fgActionNewChannelIsDFS;
+	BOOLEAN fgNewChannelIsDisabled;
+	UINT_8 ucCsaNewCh;
+	UINT_8 ucCsaCount;
+	UINT_8 ucVhtS1;
+	UINT_8 ucVhtS2;
+	UINT_8 ucVhtBw;
+	ENUM_CHNL_EXT_T eSco;
+	UINT_8 ucBssIndex;
+} SWITCH_CH_AND_BAND_PARAMS_T, *P_SWITCH_CH_AND_BAND_PARAMS_T;
+#endif
+
 /*******************************************************************************
 *                            P U B L I C   D A T A
 ********************************************************************************
@@ -273,6 +288,21 @@ extern RLM_CAL_RESULT_ALL_V2_T g_rBackupCalDataAllV2;
 	((_prBssInfo)->eBand == BAND_5G && \
 	(_prAdapter)->rWifiVar.rConnSettings.uc5GBandwidthMode \
 	== CONFIG_BW_20_40M))
+
+#if CFG_SUPPORT_DFS
+#define MAX_CSA_COUNT 255
+#define HAS_CH_SWITCH_PARAMS(prCSAParams, prBssDesc) \
+	(prCSAParams->ucCsaNewCh > 0 && \
+	 prCSAParams->ucCsaNewCh != prBssDesc->ucChannelNum)
+#define HAS_SCO_PARAMS(prCSAParams) (prCSAParams->eSco > 0)
+#define HAS_WIDE_BAND_PARAMS(prCSAParams) \
+	(prCSAParams->ucVhtBw > 0 || \
+	 prCSAParams->ucVhtS1 > 0 || \
+	 prCSAParams->ucVhtS2 > 0)
+#define SHOULD_CH_SWITCH(current, prCSAParams, prBssDesc) \
+	(HAS_CH_SWITCH_PARAMS(prCSAParams, prBssDesc) && \
+	 (current < prCSAParams->ucCsaCount))
+#endif
 
 /*******************************************************************************
 *                   F U N C T I O N   D E C L A R A T I O N S
@@ -357,6 +387,11 @@ VOID rlmReqGenerateVhtOpNotificationIE(P_ADAPTER_T prAdapter, P_MSDU_INFO_T prMs
 
 #if CFG_SUPPORT_DFS
 VOID rlmProcessSpecMgtAction(P_ADAPTER_T prAdapter, P_SW_RFB_T prSwRfb);
+
+VOID rlmResetCSAParams(P_BSS_INFO_T prBssInfo);
+
+VOID rlmCsaTimeout(IN P_ADAPTER_T prAdapter,
+				ULONG ulParamPtr);
 #endif
 
 VOID
@@ -421,6 +456,11 @@ VOID rlmReviseMaxBw(
 	PUINT_8 peChannelWidth,
 	PUINT_8 pucS1,
 	PUINT_8 pucPrimaryCh);
+
+VOID rlmRevisePreferBandwidthNss(
+	P_ADAPTER_T prAdapter,
+	UINT_8 ucBssIndex,
+	P_STA_RECORD_T prStaRec);
 
 #if CFG_SUPPORT_QUIET
 VOID rrmQuietIeNotExist(

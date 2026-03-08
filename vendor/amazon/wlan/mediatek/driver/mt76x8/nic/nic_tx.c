@@ -1281,6 +1281,14 @@ nicTxComposeDesc(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo,
 	default:
 		break;
 	}
+		if (prMsduInfo->fgIs802_1x) {
+			if (prAdapter->fgIsTest1xTx == 2) {
+				DBGLOG(RSN, STATE, "%s: (fgIsTest1xTx == 2) test 1XTX frame stuck in queue\n", __func__);
+				HAL_MAC_TX_DESC_SET_FR_RATE(prTxDesc, 0xff);
+				HAL_MAC_TX_DESC_SET_FIXED_RATE_MODE_TO_DESC(prTxDesc);
+				HAL_MAC_TX_DESC_SET_FIXED_RATE_ENABLE(prTxDesc);
+			}
+		}
 
 }
 
@@ -1725,39 +1733,29 @@ VOID nicTxFreeDescTemplate(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prStaRec)
 
 	DBGLOG(QM, INFO, "Free TXD template for STA[%u] QoS[%u]\n", prStaRec->ucIndex, prStaRec->fgIsQoS);
 
-	if (prStaRec->fgIsQoS) {
-		for (ucTid = 0; ucTid < TX_DESC_TID_NUM; ucTid++) {
-			prTxDescList[ucTid] =
+	for (ucTid = 0; ucTid < TX_DESC_TID_NUM; ucTid++) {
+		prTxDescList[ucTid] =
 			(P_HW_MAC_TX_DESC_T) prStaRec->aprTxDescTemplate[ucTid];
 
-			if (prTxDescList[ucTid]) {
-				if (HAL_MAC_TX_DESC_IS_LONG_FORMAT(prTxDescList[ucTid]))
-					ucTxDescSizeList[ucTid] = NIC_TX_DESC_LONG_FORMAT_LENGTH;
-				else
-					ucTxDescSizeList[ucTid] = NIC_TX_DESC_SHORT_FORMAT_LENGTH;
-
-				prStaRec->aprTxDescTemplate[ucTid] = NULL;
-			}
-		}
-	} else {
-		prTxDescList[0] = (P_HW_MAC_TX_DESC_T) prStaRec->aprTxDescTemplate[0];
-		for (ucTid = 0; ucTid < TX_DESC_TID_NUM; ucTid++)
-			prStaRec->aprTxDescTemplate[ucTid] = NULL;
-
-		if (prTxDescList[0]) {
-			if (HAL_MAC_TX_DESC_IS_LONG_FORMAT(prTxDescList[0]))
-				ucTxDescSizeList[0] = NIC_TX_DESC_LONG_FORMAT_LENGTH;
+		if (prTxDescList[ucTid]) {
+			if (HAL_MAC_TX_DESC_IS_LONG_FORMAT(prTxDescList[ucTid]))
+				ucTxDescSizeList[ucTid] = NIC_TX_DESC_LONG_FORMAT_LENGTH;
 			else
-				ucTxDescSizeList[0] = NIC_TX_DESC_SHORT_FORMAT_LENGTH;
+				ucTxDescSizeList[ucTid] = NIC_TX_DESC_SHORT_FORMAT_LENGTH;
+
+			prStaRec->aprTxDescTemplate[ucTid] = NULL;
 		}
 	}
 
 	KAL_RELEASE_SPIN_LOCK(prAdapter, SPIN_LOCK_TX_DESC);
+
 	for (ucTid = 0; ucTid < TX_DESC_TID_NUM; ucTid++) {
+		if (ucTid > 0 && prTxDescList[ucTid] == prTxDescList[ucTid-1])
+			break;
+
 		if (prTxDescList[ucTid]) {
 			kalMemFree(prTxDescList[ucTid],
 				VIR_MEM_TYPE, ucTxDescSizeList[ucTid]);
-			prTxDescList[ucTid] = NULL;
 		}
 	}
 }
@@ -1767,26 +1765,22 @@ VOID nicTxFreeDescTemplate(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prStaRec)
 	UINT_8 ucTid;
 	UINT_8 ucTxDescSize;
 	P_HW_MAC_TX_DESC_T prTxDesc;
+	void *prFirstTxDesc;
 	/* This is to lock the process to preventing */
 	/* nicTxFreeDescTemplate while Filling it */
 	KAL_SPIN_LOCK_DECLARATION();
 	KAL_ACQUIRE_SPIN_LOCK(prAdapter, SPIN_LOCK_TX_DESC);
 	DBGLOG(QM, INFO, "Free TXD template for STA[%u] QoS[%u]\n", prStaRec->ucIndex, prStaRec->fgIsQoS);
-	if (prStaRec->fgIsQoS) {
-		for (ucTid = 0; ucTid < TX_DESC_TID_NUM; ucTid++) {
-			prTxDesc = (P_HW_MAC_TX_DESC_T) prStaRec->aprTxDescTemplate[ucTid];
-			if (prTxDesc) {
-				if (HAL_MAC_TX_DESC_IS_LONG_FORMAT(prTxDesc))
-					ucTxDescSize = NIC_TX_DESC_LONG_FORMAT_LENGTH;
-				else
-					ucTxDescSize = NIC_TX_DESC_SHORT_FORMAT_LENGTH;
-				kalMemFree(prTxDesc, VIR_MEM_TYPE, ucTxDescSize);
-				prTxDesc = prStaRec->aprTxDescTemplate[ucTid] = NULL;
-			}
-		}
-	} else {
-		prTxDesc = (P_HW_MAC_TX_DESC_T) prStaRec->aprTxDescTemplate[0];
+
+	prFirstTxDesc = prStaRec->aprTxDescTemplate[0];
+	for (ucTid = 0; ucTid < TX_DESC_TID_NUM; ucTid++) {
+		prTxDesc = (P_HW_MAC_TX_DESC_T) prStaRec->aprTxDescTemplate[ucTid];
 		if (prTxDesc) {
+			/* For non-QoS STA, all share 1 TXD template (TID0) */
+			/* refer to nicTxGenerateDescTemplate */
+			if (ucTid > 0 && prTxDesc == prFirstTxDesc)
+				break;
+
 			if (HAL_MAC_TX_DESC_IS_LONG_FORMAT(prTxDesc))
 				ucTxDescSize = NIC_TX_DESC_LONG_FORMAT_LENGTH;
 			else
@@ -1794,10 +1788,12 @@ VOID nicTxFreeDescTemplate(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prStaRec)
 			kalMemFree(prTxDesc, VIR_MEM_TYPE, ucTxDescSize);
 			prTxDesc = NULL;
 		}
-		for (ucTid = 0; ucTid < TX_DESC_TID_NUM; ucTid++)
-			prStaRec->aprTxDescTemplate[ucTid] = NULL;
 	}
+
 	KAL_RELEASE_SPIN_LOCK(prAdapter, SPIN_LOCK_TX_DESC);
+
+	for (ucTid = 0; ucTid < TX_DESC_TID_NUM; ucTid++)
+		prStaRec->aprTxDescTemplate[ucTid] = NULL;
 }
 #endif
 
@@ -1934,6 +1930,9 @@ WLAN_STATUS nicTxCmd(IN P_ADAPTER_T prAdapter, IN P_CMD_INFO_T prCmdInfo, IN UIN
 	P_MSDU_INFO_T prMsduInfo;
 	P_TX_CTRL_T prTxCtrl;
 	struct sk_buff *skb;
+#if CFG_FTV_62866_PATCH
+	uint32_t ret = WLAN_STATUS_SUCCESS;
+#endif
 
 	KAL_SPIN_LOCK_DECLARATION();
 
@@ -1955,7 +1954,11 @@ WLAN_STATUS nicTxCmd(IN P_ADAPTER_T prAdapter, IN P_CMD_INFO_T prCmdInfo, IN UIN
 		prCmdInfo->pucTxp = skb->data;
 		prCmdInfo->u4TxpLen = skb->len;
 
+#if CFG_FTV_62866_PATCH
+		ret = HAL_WRITE_TX_CMD(prAdapter, prCmdInfo, ucTC);
+#else
 		HAL_WRITE_TX_CMD(prAdapter, prCmdInfo, ucTC);
+#endif
 
 		prMsduInfo->prPacket = NULL;
 
@@ -1985,7 +1988,11 @@ WLAN_STATUS nicTxCmd(IN P_ADAPTER_T prAdapter, IN P_CMD_INFO_T prCmdInfo, IN UIN
 		prCmdInfo->pucTxp = prMsduInfo->prPacket;
 		prCmdInfo->u4TxpLen = prMsduInfo->u2FrameLength;
 
+#if CFG_FTV_62866_PATCH
+		ret = HAL_WRITE_TX_CMD(prAdapter, prCmdInfo, ucTC);
+#else
 		HAL_WRITE_TX_CMD(prAdapter, prCmdInfo, ucTC);
+#endif
 		/* <4> Management Frame Post-Processing */
 		GLUE_DEC_REF_CNT(prTxCtrl->i4TxMgmtPendingNum);
 
@@ -2032,13 +2039,25 @@ WLAN_STATUS nicTxCmd(IN P_ADAPTER_T prAdapter, IN P_CMD_INFO_T prCmdInfo, IN UIN
 		prCmdInfo->pucTxp = NULL;
 		prCmdInfo->u4TxpLen = 0;
 
+#if CFG_FTV_62866_PATCH
+		ret = HAL_WRITE_TX_CMD(prAdapter, prCmdInfo, ucTC);
+		DBGLOG(INIT, TRACE,
+		       "TX CMD: ID[0x%02X] SEQ[%u] SET[%u] LEN[%u] status[%x]\n",
+		       prWifiCmd->ucCID, prWifiCmd->ucSeqNum,
+		       prWifiCmd->ucSetQuery, prWifiCmd->u2Length, ret);
+#else
 		HAL_WRITE_TX_CMD(prAdapter, prCmdInfo, ucTC);
 
 		DBGLOG(INIT, INFO, "TX CMD: ID[0x%02X] SEQ[%u] SET[%u] LEN[%u]\n",
 			prWifiCmd->ucCID, prWifiCmd->ucSeqNum, prWifiCmd->ucSetQuery, prWifiCmd->u2Length);
+#endif
 	}
 
+#if CFG_FTV_62866_PATCH
+	return ret;
+#else
 	return WLAN_STATUS_SUCCESS;
+#endif
 }				/* end of nicTxCmd() */
 
 /*----------------------------------------------------------------------------*/
@@ -2295,8 +2314,11 @@ BOOLEAN nicTxFillMsduInfo(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo,
 			prMsduInfo->pfTxDoneHandler = wlanDhcpTxDone;
 		else if (GLUE_TEST_PKT_FLAG(prPacket, ENUM_PKT_ARP) && prAdapter->rWifiVar.ucArpTxDone)
 			prMsduInfo->pfTxDoneHandler = wlanArpTxDone;
-		else if (GLUE_TEST_PKT_FLAG(prPacket, ENUM_PKT_1X))
+		else if (GLUE_TEST_PKT_FLAG(prPacket, ENUM_PKT_1X)) {
 			prMsduInfo->pfTxDoneHandler = wlan1xTxDone;
+			nicTxSetPktLifeTime(prMsduInfo, 1500);
+			nicTxSetPktRetryLimit(prMsduInfo, TX_DESC_TX_COUNT_NO_LIMIT);
+		}
 
 		if (GLUE_TEST_PKT_FLAG(prPacket, ENUM_PKT_DHCP) ||
 			GLUE_TEST_PKT_FLAG(prPacket, ENUM_PKT_ARP) ||

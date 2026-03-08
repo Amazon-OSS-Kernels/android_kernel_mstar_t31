@@ -275,8 +275,11 @@
 #define RATE_36M                                72	/* 36M */
 #define RATE_48M                                96	/* 48M */
 #define RATE_54M                                108	/* 54M */
-/* 7.3.2.14 BSS membership selector */
 
+/* 7.3.2.14 BSS membership selector */
+#if CFG_SUPPORT_H2E
+#define RATE_H2E_ONLY                           123	/* BSS Selector - Hash To Element only */
+#endif
 #define RATE_VHT_PHY                            126	/* BSS Selector - Clause 22. HT PHY */
 #define RATE_HT_PHY                             127	/* BSS Selector - Clause 20. HT PHY */
 #define RATE_MASK                               BITS(0, 6)	/* mask bits for the rate */
@@ -561,6 +564,10 @@
 #define AUTH_TRANSACTION_SEQ_3                      3
 #define AUTH_TRANSACTION_SEQ_4                      4
 
+#if CFG_SUPPORT_H2E
+#define AUTH_STATUS_CODE_FIELD_LEN                  2
+#endif
+
 /* 7.3.1.3 Beacon Interval field */
 #define BEACON_INTERVAL_FIELD_LEN                   2
 
@@ -727,6 +734,10 @@
 #define STATUS_CODE_DESTINATION_STA_NOT_PRESENT     49	/* Destination STA is not present within this QBSS */
 #define STATUS_CODE_DESTINATION_STA_NOT_QSTA        50	/* Destination STA is not a QSTA */
 #define STATUS_CODE_ASSOC_DENIED_LARGE_LIS_INTERVAL 51	/* Association denied because the ListenInterval is too large */
+
+#if CFG_SUPPORT_H2E
+#define WLAN_STATUS_SAE_HASH_TO_ELEMENT             126
+#endif
 
 /* proprietary definition of reserved field of Status Code */
 #define STATUS_CODE_JOIN_FAILURE                    0xFFF0	/* Join failure */

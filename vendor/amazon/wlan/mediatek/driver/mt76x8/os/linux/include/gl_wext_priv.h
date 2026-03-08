@@ -272,6 +272,9 @@
 #define CMD_ENFORCE_POWER_MODE  "ENFORCE_POWER_MODE"
 #define CMD_GET_POWER_MODE      "GET_POWER_MODE"
 
+#define CMD_GET_1XTX_STATUS     "GET_1XTX_STATUS"
+#define CMD_TEST_1XTX_STATUS    "TEST_1XTX_STATUS"
+
 #ifdef CFG_SUPPORT_EXT_PTA_DEBUG_COMMAND
 #define CMD_EXT_PTA_CONFIG      "EXT_PTA_CONFIG"
 #endif
@@ -329,6 +332,9 @@ enum {
 #define COEX_REF_TABLE_ID_BTRX_GAIN_INFO             35
 #define COEX_REF_TABLE_ID_BTTX_PWR_DIST              36
 #define COEX_REF_TABLE_ID_WFRX_GAIN_DIST             37
+
+#define IW_PRIV_BUF_SIZE			     2000
+
 /*******************************************************************************
 *                             D A T A   T Y P E S
 ********************************************************************************

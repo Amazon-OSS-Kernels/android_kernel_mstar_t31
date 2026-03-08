@@ -356,6 +356,10 @@ endif
 DRIVER_BUILD_DATE=$(shell date +%Y%m%d%H%M%S)
 ccflags-y += -DDRIVER_BUILD_DATE='"$(DRIVER_BUILD_DATE)"'
 
+ifeq ($(CFG_DFS_NEWCH_DFS_FORCE_DISCONNECT),n)
+	ccflags-y += -DCFG_DFS_NEWCH_DFS_FORCE_DISCONNECT=0
+endif
+
 ifneq ($(CFG_CFG80211_VERSION),)
 VERSION_STR = $(subst ",,$(subst ., , $(subst -, ,$(subst v,,$(CFG_CFG80211_VERSION)))))
 $(info VERSION_STR=$(VERSION_STR))
@@ -425,6 +429,18 @@ endif
 
 ifneq ($(CFG_CHIP_RESET_SUPPORT),)
 ccflags-y += -DCFG_CHIP_RESET_SUPPORT=$(CFG_CHIP_RESET_SUPPORT)
+endif
+
+ifneq ($(CFG_FTV_64888_PATCH),)
+ccflags-y += -DCFG_FTV_64888_PATCH=$(CFG_FTV_64888_PATCH)
+endif
+
+ifneq ($(CFG_RESET_DUE_TO_REG_NETDEV_FAIL),)
+ccflags-y += -DCFG_RESET_DUE_TO_REG_NETDEV_FAIL=$(CFG_RESET_DUE_TO_REG_NETDEV_FAIL)
+endif
+
+ifneq ($(CFG_FTV_62866_PATCH),)
+ccflags-y += -DCFG_FTV_62866_PATCH=$(CFG_FTV_62866_PATCH)
 endif
 
 
@@ -569,6 +585,7 @@ ccflags-y += -DCFG_PREALLOC_MEMORY
 ccflags-y += -I$(src)/prealloc/include
 MODULE_NAME_PREALLOC = $(MODULE_NAME)_prealloc
 PREALLOC_OBJS := prealloc/prealloc.o
+PREALLOC_OBJS += prealloc/chip_reset_info.o
 $(MODULE_NAME_PREALLOC)-objs += $(PREALLOC_OBJS)
 obj-m += $(MODULE_NAME_PREALLOC).o
 endif

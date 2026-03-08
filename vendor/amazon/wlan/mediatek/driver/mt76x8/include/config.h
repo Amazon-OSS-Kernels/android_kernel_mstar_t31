@@ -164,6 +164,10 @@
 #define CFG_SUPPORT_DFS             1	/* DFS (802.11h) */
 #endif
 
+#ifndef CFG_DFS_NEWCH_DFS_FORCE_DISCONNECT
+#define CFG_DFS_NEWCH_DFS_FORCE_DISCONNECT          1
+#endif
+
 #if (CFG_SUPPORT_DFS == 1)	/* Add by Enlai */
 #define CFG_SUPPORT_QUIET           1	/* Quiet (802.11h) */
 #define CFG_SUPPORT_SPEC_MGMT       1	/* Spectrum Management (802.11h): TPC and DFS */
@@ -1061,6 +1065,15 @@
 #endif
 
 /*------------------------------------------------------------------------------
+ * Support WPA3-R3 H2E
+ *------------------------------------------------------------------------------
+ */
+#ifndef CFG_SUPPORT_H2E
+#define CFG_SUPPORT_H2E 1
+#endif
+
+
+/*------------------------------------------------------------------------------
  * Support Single RX chain setting
  *------------------------------------------------------------------------------
  */
@@ -1084,6 +1097,19 @@
 #ifndef CFG_IOCTL_WAIT_FOR_COMPLETION_TIMEOUT
 #define CFG_IOCTL_WAIT_FOR_COMPLETION_TIMEOUT 0
 #endif
+
+#ifndef CFG_FTV_64888_PATCH
+#define CFG_FTV_64888_PATCH 0
+#endif
+
+#ifndef CFG_RESET_DUE_TO_REG_NETDEV_FAIL
+#define CFG_RESET_DUE_TO_REG_NETDEV_FAIL 0
+#endif
+
+#ifndef CFG_FTV_62866_PATCH
+#define CFG_FTV_62866_PATCH 0
+#endif
+
 
 /*******************************************************************************
 *                             D A T A   T Y P E S

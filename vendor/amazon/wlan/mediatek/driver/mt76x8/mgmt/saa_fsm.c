@@ -140,6 +140,9 @@ void saaSendAuthAssoc(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prStaRec)
 	P_BSS_DESC_T prBssDesc = NULL;
 	P_AIS_SPECIFIC_BSS_INFO_T prAisSpecBssInfo = NULL;
 	PARAM_SSID_T rParamSsid;
+#if CFG_SUPPORT_H2E
+	UINT_16 u2AuthStatusCode = STATUS_CODE_RESERVED;
+#endif
 
 	ASSERT(prAdapter);
 	ASSERT(prStaRec);
@@ -174,6 +177,17 @@ void saaSendAuthAssoc(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prStaRec)
 					AUTH_TRANSACTION_SEQENCE_NUM_FIELD_LEN);
 				DBGLOG(SAA, INFO, "[SAA]Get auth SN = %d from Conn Settings\n", u2AuthTransSN);
 			}
+
+#if CFG_SUPPORT_H2E
+			if (prAdapter->prGlueInfo->rWpaInfo.u4AuthAlg & AUTH_TYPE_SAE) {
+				kalMemCopy(&u2AuthStatusCode,
+					&prConnSettings->aucAuthData[2],
+					AUTH_STATUS_CODE_FIELD_LEN);
+				DBGLOG(SAA, INFO,
+					"[SAA]Get auth StatusCode=%d from Conn Settings\n", u2AuthStatusCode);
+			}
+#endif
+
 			/* Update Station Record - Class 1 Flag */
 			if (prStaRec->ucStaState != STA_STATE_1) {
 				DBGLOG(SAA, WARN, "[SAA]Rx send auth CMD at unexpect state:%d\n", prStaRec->ucStaState);
@@ -187,7 +201,11 @@ void saaSendAuthAssoc(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prStaRec)
 							prStaRec->ucBssIndex,
 							NULL,
 							u2AuthTransSN,
+#if CFG_SUPPORT_H2E
+							u2AuthStatusCode);
+#else
 							STATUS_CODE_RESERVED);
+#endif
 #endif /* CFG_SUPPORT_AAA */
 				prStaRec->eAuthAssocSent = u2AuthTransSN;
 			} else { /* Prepare to send association frame */
@@ -771,6 +789,13 @@ saaFsmRunEventTxDone(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo, IN E
 
 	ASSERT(prStaRec);
 
+#if CFG_CHIP_RESET_SUPPORT
+	if (kalIsResetting()) {
+		DBGLOG(SAA, WARN, "Skip TxDone event due to chip resetting\n");
+		return WLAN_STATUS_SUCCESS;
+	}
+#endif
+
 	DBGLOG(SAA, LOUD, "EVENT-TX DONE: Current Time = %d\n", kalGetTimeTick());
 
 	/* Trigger statistics log if Auth/Assoc Tx failed */
@@ -979,7 +1004,9 @@ VOID saaFsmRunEventRxRespTimeOut(IN P_ADAPTER_T prAdapter, IN ULONG ulParamPtr)
 #if CFG_SUPPORT_CFG80211_AUTH
 	if (!IS_STA_IN_P2P(prStaRec)) {
 		/* Retry the last sent frame if possible */
-		saaSendAuthAssoc(prAdapter, prStaRec);
+		if (prStaRec->ucStaState != STA_STATE_3) {
+			saaSendAuthAssoc(prAdapter, prStaRec);
+		}
 	} else {
 #endif
 	eNextState = prStaRec->eAuthAssocState;
@@ -1139,8 +1166,11 @@ VOID saaFsmRunEventRxAuth(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwRfb)
 
 		/* Reset Send Auth/(Re)Assoc Frame Count */
 		prStaRec->ucTxAuthAssocRetryCount = 0;
-		if (u2StatusCode == STATUS_CODE_SUCCESSFUL) {
-
+		if (u2StatusCode == STATUS_CODE_SUCCESSFUL
+#if CFG_SUPPORT_H2E
+			|| (u2StatusCode == WLAN_STATUS_SAE_HASH_TO_ELEMENT)
+#endif
+		) {
 			authProcessRxAuth2_Auth4Frame(prAdapter, prSwRfb);
 		} else {
 			DBGLOG(SAA, INFO,
@@ -1432,7 +1462,7 @@ WLAN_STATUS saaFsmRunEventRxDeauth(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwR
 	prDeauthFrame = (P_WLAN_DEAUTH_FRAME_T) prSwRfb->pvHeader;
 	ucWlanIdx = (UINT_8) HAL_RX_STATUS_GET_WLAN_IDX(prSwRfb->prRxStatus);
 
-	DBGLOG(SAA, INFO, "Rx Deauth frame ,DA[" MACSTR "] SA[" MACSTR "] BSSID[" MACSTR "] ReasonCode[0x%x]\n",
+	DBGLOG(SAA, EVENT, "Rx Deauth frame ,DA[" MACSTR "] SA[" MACSTR "] BSSID[" MACSTR "] ReasonCode[0x%x]\n",
 	       MAC2STR(prDeauthFrame->aucDestAddr), MAC2STR(prDeauthFrame->aucSrcAddr),
 	       MAC2STR(prDeauthFrame->aucBSSID), prDeauthFrame->u2ReasonCode);
 
@@ -1738,7 +1768,7 @@ WLAN_STATUS saaFsmRunEventRxDisassoc(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prS
 	wdev = prAdapter->prGlueInfo->prDevHandler->ieee80211_ptr;
 #endif
 
-	DBGLOG(SAA, INFO,
+	DBGLOG(SAA, EVENT,
 	       "Rx Disassoc frame from BSSID[" MACSTR "] DA[" MACSTR "] ReasonCode[0x%x]\n",
 	       MAC2STR(prDisassocFrame->aucBSSID), MAC2STR(prDisassocFrame->aucDestAddr),
 	       prDisassocFrame->u2ReasonCode);

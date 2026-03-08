@@ -238,6 +238,9 @@ VOID aisInitializeConnectionSettings(IN P_ADAPTER_T prAdapter, IN P_REG_INFO_T p
 #if CFG_SUPPORT_OWE
 	kalMemSet(&prConnSettings->rOweInfo, 0, sizeof(struct OWE_INFO_T));
 #endif
+#if CFG_SUPPORT_H2E
+	kalMemSet(&prConnSettings->rRsnXE, 0, sizeof(struct RSNXE));
+#endif
 }				/* end of aisFsmInitializeConnectionSettings() */
 
 /*----------------------------------------------------------------------------*/
@@ -1081,7 +1084,9 @@ VOID aisFsmSteps(IN P_ADAPTER_T prAdapter, ENUM_AIS_STATE_T eNextState)
 									cnmTimerStopTimer(prAdapter,
 										&prAdapter->rWifiVar.rDBDCDisableCountdownTimer);
 
-								if (timerPendingTimer(&prAdapter->rWifiVar.rDBDCSwitchGuardTimer))
+								/* only stop pening Switch Guard Timer when DBDC is being disabled */
+								if (timerPendingTimer(&prAdapter->rWifiVar.rDBDCSwitchGuardTimer) &&
+									!prAdapter->rWifiVar.fgDbDcModeEn)
 									cnmTimerStopTimer(prAdapter,
 										&prAdapter->rWifiVar.rDBDCSwitchGuardTimer);
 
@@ -1448,6 +1453,12 @@ VOID aisFsmSteps(IN P_ADAPTER_T prAdapter, ENUM_AIS_STATE_T eNextState)
 			break;
 
 		case AIS_STATE_JOIN_FAILURE:
+			if (prAisFsmInfo->prTargetBssDesc) {
+				if (prAisFsmInfo->prTargetBssDesc->fgIsConnecting != FALSE)
+					DBGLOG(AIS, ERROR, "Connecting Flag(%d) is unusual in JOIN_FAILURE state\n",
+							prAisFsmInfo->prTargetBssDesc->fgIsConnecting);
+			}
+
 			nicMediaJoinFailure(prAdapter,
 					prAdapter->prAisBssInfo->ucBssIndex,
 					(prConnSettings->fgIsDisconnectedByNonRequest)?
@@ -1944,11 +1955,15 @@ VOID aisFsmStateAbort(IN P_ADAPTER_T prAdapter, UINT_8 ucReasonOfDisconnect, BOO
 		break;
 
 	case AIS_STATE_REQ_REMAIN_ON_CHANNEL:
+		fgIsCheckConnected = TRUE;
+
 		/* release channel */
 		aisFsmReleaseCh(prAdapter);
 		break;
 
 	case AIS_STATE_REMAIN_ON_CHANNEL:
+		fgIsCheckConnected = TRUE;
+
 		/* 1. release channel */
 		aisFsmReleaseCh(prAdapter);
 
@@ -2042,9 +2057,7 @@ enum _ENUM_AIS_STATE_T aisFsmJoinCompleteAction(IN struct _ADAPTER_T *prAdapter,
 	struct _STA_RECORD_T *prStaRec;
 	struct _SW_RFB_T *prAssocRspSwRfb;
 	struct _BSS_INFO_T *prAisBssInfo;
-#if CFG_SUPPORT_CFG80211_AUTH
 	P_CONNECTION_SETTINGS_T prConnSettings;
-#endif
 	OS_SYSTIME rCurrentTime;
 #if CFG_SUPPORT_BFER
 	UINT_8 ucStaVhtBfer = prAdapter->rWifiVar.ucStaVhtBfer;
@@ -2056,10 +2069,8 @@ enum _ENUM_AIS_STATE_T aisFsmJoinCompleteAction(IN struct _ADAPTER_T *prAdapter,
 	ASSERT(prMsgHdr);
 
 	GET_CURRENT_SYSTIME(&rCurrentTime);
-#if CFG_SUPPORT_CFG80211_AUTH
-	prConnSettings = &(prAdapter->rWifiVar.rConnSettings);
-#endif
 
+	prConnSettings = &(prAdapter->rWifiVar.rConnSettings);
 	prAisFsmInfo = &(prAdapter->rWifiVar.rAisFsmInfo);
 	prJoinCompMsg = (struct _MSG_SAA_FSM_COMP_T *)prMsgHdr;
 	prStaRec = prJoinCompMsg->prStaRec;
@@ -2175,6 +2186,8 @@ enum _ENUM_AIS_STATE_T aisFsmJoinCompleteAction(IN struct _ADAPTER_T *prAdapter,
 				struct _BSS_DESC_T *prBssDesc;
 				PARAM_SSID_T rParamSsid;
 
+				prBssDesc = prAisFsmInfo->prTargetBssDesc;
+
 				/* 1. Increase Failure Count */
 				prStaRec->ucJoinFailureCount++;
 
@@ -2187,28 +2200,34 @@ enum _ENUM_AIS_STATE_T aisFsmJoinCompleteAction(IN struct _ADAPTER_T *prAdapter,
 				/* 3.2 reset local variable */
 				prAisFsmInfo->fgIsInfraChannelFinished = TRUE;
 
-				if (prAisBssInfo->ucSSIDLen) {
-					rParamSsid.u4SsidLen = prAisBssInfo->ucSSIDLen;
+				kalMemZero(&rParamSsid, sizeof(PARAM_SSID_T));
+
+				if (prBssDesc)
 					COPY_SSID(rParamSsid.aucSsid,
-						rParamSsid.u4SsidLen,
-						prAisBssInfo->aucSSID,
-						prAisBssInfo->ucSSIDLen);
-					prBssDesc = scanSearchBssDescByBssidAndSsid(
-							prAdapter,
-							prAisBssInfo->aucBSSID,
-							TRUE,
-							&rParamSsid);
-				} else {
+							rParamSsid.u4SsidLen,
+							prBssDesc->aucSSID,
+							prBssDesc->ucSSIDLen);
+				else
+					COPY_SSID(rParamSsid.aucSsid,
+							rParamSsid.u4SsidLen,
+							prConnSettings->aucSSID,
+							prConnSettings->ucSSIDLen);
+
+				prBssDesc =
+					scanSearchBssDescByBssidAndSsid(prAdapter,
+						prStaRec->aucMacAddr,
+						TRUE,
+						&rParamSsid);
 #if CFG_SUPPORT_CFG80211_AUTH
-					prBssDesc = scanSearchBssDescByBssidAndChanNum(
+				if (prBssDesc == NULL) {
+					prBssDesc =
+						scanSearchBssDescByBssidAndChanNum(
 							prAdapter,
 							prConnSettings->aucBSSID,
 							TRUE,
 							prConnSettings->ucChannelNum);
-#else
-					prBssDesc = scanSearchBssDescByBssid(prAdapter, prStaRec->aucMacAddr);
-#endif
 				}
+#endif
 
 				if (prBssDesc == NULL)
 					return eNextState;
@@ -3940,6 +3959,10 @@ VOID aisBssLinkDown(IN P_ADAPTER_T prAdapter)
 		prConnSettings->fgIsDisconnectedByNonRequest = TRUE;
 		DBGLOG(AIS, EVENT, "aisBssLinkDown\n");
 		aisFsmStateAbort(prAdapter, DISCONNECT_REASON_CODE_DISASSOCIATED, FALSE);
+		aisDeauthXmitComplete(prAdapter, NULL, TX_RESULT_LIFE_TIMEOUT);
+	} else {
+		DBGLOG(AIS, EVENT, "Skip aisBssLinkDown (state=%d)\n",
+			prAisBssInfo->eConnectionState);
 	}
 
     /* kalIndicateStatusAndComplete(prAdapter->prGlueInfo, WLAN_STATUS_SCAN_COMPLETE, NULL, 0); */
@@ -3985,7 +4008,7 @@ aisDeauthXmitComplete(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo, IN 
 	ASSERT(prAdapter);
 
 	prAisFsmInfo = &(prAdapter->rWifiVar.rAisFsmInfo);
-	if (rTxDoneStatus == TX_RESULT_SUCCESS)
+	if (rTxDoneStatus == TX_RESULT_SUCCESS || rTxDoneStatus == TX_RESULT_DROPPED_IN_DRIVER)
 		cnmTimerStopTimer(prAdapter, &prAisFsmInfo->rDeauthDoneTimer);
 
 	if (prAisFsmInfo->eCurrentState == AIS_STATE_DISCONNECTING) {

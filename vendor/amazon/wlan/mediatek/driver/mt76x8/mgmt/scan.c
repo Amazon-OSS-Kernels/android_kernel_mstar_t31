@@ -1315,6 +1315,9 @@ P_BSS_DESC_T scanAddToBssDesc(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwRfb)
 			prBssDesc = scanAllocateBssDesc(prAdapter);
 			if (prBssDesc)
 				break;
+
+			DBGLOG(SCN, WARN, "Allocate Bss Desc failed\n");
+
 			/* 4 <1.2.6> no space, should not happen */
 			/* ASSERT(0); // still no space available ? */
 			return NULL;
@@ -1364,8 +1367,10 @@ P_BSS_DESC_T scanAddToBssDesc(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwRfb)
 			scanRemoveBssDescByBssid(prAdapter, prBssDesc->aucBSSID);
 
 			prBssDesc = scanAllocateBssDesc(prAdapter);
-			if (!prBssDesc)
+			if (!prBssDesc) {
+				DBGLOG(SCN, WARN, "Allocate Bss Desc failed\n");
 				return NULL;
+			}
 
 			/* restore */
 			prBssDesc->fgIsConnected = fgIsConnected;

@@ -6330,6 +6330,11 @@ wlanoidSetSwCtrlWrite(IN P_ADAPTER_T prAdapter,
 		ucChannelWidth = (UINT_8)((u4Data & BITS(4, 7)) >> 4);
 		ucBssIndex = (UINT_8) u2SubId;
 
+		if (!IS_BSS_INDEX_VALID(ucBssIndex)) {
+			DBGLOG(RLM, ERROR, "Invalid bssidx:%d\n", ucBssIndex);
+			break;
+		}
+
 		/* ucChannelWidth 0:20MHz, 1:40MHz, 2:80MHz, 3:160MHz 4:80+80MHz */
 		DBGLOG(REQ, INFO, "Change BSS[%d] OpMode to BW[%d] Nss[%d]\n",
 			ucBssIndex, ucChannelWidth, ucNss);
@@ -12499,7 +12504,7 @@ wlanoidLinkDown(IN P_ADAPTER_T prAdapter,
 		return WLAN_STATUS_ADAPTER_NOT_READY;
 	}
 
-		aisBssLinkDown(prAdapter);
+	aisBssLinkDown(prAdapter);
 
 	return WLAN_STATUS_SUCCESS;
 }				/* wlanoidSetDisassociate */
@@ -12742,3 +12747,26 @@ uint32_t wlanGetSupportedFeatureSet(IN P_GLUE_INFO_T prGlueInfo)
     return u4FeatureSet;
 }
 
+WLAN_STATUS
+wlanSuspendLinkDown(IN P_GLUE_INFO_T prGlueInfo)
+{
+	UINT_32 u4BufLen;
+	WLAN_STATUS rStatus = WLAN_STATUS_SUCCESS;
+	P_AIS_FSM_INFO_T prAisFsmInfo;
+
+	prAisFsmInfo = &(prGlueInfo->prAdapter->rWifiVar.rAisFsmInfo);
+
+	/* 1) wifi cfg "Wow" must be true, 2) wow is disable 3) WIfI connected => execute link down flow */
+	if (prGlueInfo->prAdapter->rWifiVar.ucWow && !prGlueInfo->prAdapter->rWowCtrl.fgWowEnable) {
+		if (kalGetMediaStateIndicated(prGlueInfo) == PARAM_MEDIA_STATE_CONNECTED ||
+			prAisFsmInfo->eCurrentState == AIS_STATE_DISCONNECTING) {
+
+			DBGLOG(REQ, STATE, "Suspend link down\n");
+			rStatus = kalIoctl(prGlueInfo, wlanoidLinkDown, NULL, 0, TRUE, FALSE, FALSE, &u4BufLen);
+			if(rStatus != WLAN_STATUS_SUCCESS)
+				DBGLOG(REQ, WARN, "Suspend link down failed\n");
+		}
+	}
+
+	return rStatus;
+}

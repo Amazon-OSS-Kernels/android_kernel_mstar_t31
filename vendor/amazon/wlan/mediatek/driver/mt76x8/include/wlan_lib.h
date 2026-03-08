@@ -890,6 +890,8 @@ typedef enum _ENUM_TX_RESULT_CODE_T {
 	TX_RESULT_DROPPED_IN_DRIVER = 32,
 	TX_RESULT_DROPPED_IN_FW,
 	TX_RESULT_QUEUE_CLEARANCE,
+	TX_RESULT_UNINITIALIZED = 48, // driver only
+	TX_RESULT_1XTX_CLEAR, // driver only
 	TX_RESULT_NUM
 } ENUM_TX_RESULT_CODE_T, *P_ENUM_TX_RESULT_CODE_T;
 
@@ -1024,6 +1026,8 @@ VOID wlanClearDataQueue(IN P_ADAPTER_T prAdapter);
 
 VOID wlanClearRxToOsQueue(IN P_ADAPTER_T prAdapter);
 #endif
+
+VOID wlanClearPendingCommandQueue(IN P_ADAPTER_T prAdapter);
 
 VOID wlanReleaseCommand(IN P_ADAPTER_T prAdapter, IN P_CMD_INFO_T prCmdInfo, IN ENUM_TX_RESULT_CODE_T rTxDoneStatus);
 
