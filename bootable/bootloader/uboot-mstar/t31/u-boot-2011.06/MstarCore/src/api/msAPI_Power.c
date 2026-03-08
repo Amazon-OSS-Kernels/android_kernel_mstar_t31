@@ -269,6 +269,7 @@ MS_BOOL msAPI_PM_Reset(void)
 EN_POWER_ON_MODE msAPI_Power_QueryPowerOnMode(void)
 {
     U8 u8PowerDownMode =  (U8)MDrv_PM_PowerOnMode();
+    U8 u8WakeupSource = (U8)MDrv_PM_GetWakeupSource();
 
     switch ( u8PowerDownMode )
     {
@@ -277,22 +278,30 @@ EN_POWER_ON_MODE msAPI_Power_QueryPowerOnMode(void)
         case PM_MODE_SLEEP:     // 0x02
         case PM_MODE_DEEPSLEEP: // 0x03
         {
-            printf("DC on\n");
+            printf("DC on, WakeupSource = 0x%x\n", u8WakeupSource);
             return EN_POWER_DC_BOOT;
         }
         // AC ON
         case PM_MODE_DEFAULT:   // 0xFF
         {
-            printf("AC on\n");
+            printf("AC on, WakeupSource = 0x%x\n", u8WakeupSource);
             return EN_POWER_AC_BOOT;
         }
         // EXCEPTION
         default:
         {
             if(u8PowerDownMode == 0xF1)
-                printf("DC on !! \n");
+            {
+                printf("DC on!! WakeupSource = 0x%x\n", u8WakeupSource);
+            }
+#if defined(CONFIG_MSTAR_M7632)
+            else if (u8PowerDownMode == 0xFD)
+            {
+                printf("DC on!! PowerDownMode = 0x%x, WakeupSource = 0x%x\n", u8PowerDownMode, u8WakeupSource);
+            }
+#endif
             else
-                printf("read PM_SLEEP_AC_DC_ON error\n");
+                printf("read PM_SLEEP_AC_DC_ON error, PowerDownMode = 0x%x, WakeupSource = 0x%x\n", u8PowerDownMode, u8WakeupSource);
 
             return EN_POWER_DC_BOOT;
         }
@@ -335,7 +344,7 @@ void msAPI_Power_PowerDown_EXEC(void)
 
     if (!strcmp(amzn_target_device_name(), "sophia"))
     {
-		MDrv_WriteByte(0x1040, 0x01);//Sophia, abc123 IR Header
+		MDrv_WriteByte(0x1040, 0x01);//Sophia, Steffi IR Header
             memcpy((void *)&(u8IR2Cfg[0]), (void *)&(u8SophiaIR2Cfg[0]), (sizeof(u8SophiaIR2Cfg)));
     }
     else if (!strcmp(amzn_target_device_name(), "ABC") || !strcmp(amzn_target_device_name(), "abc123"))

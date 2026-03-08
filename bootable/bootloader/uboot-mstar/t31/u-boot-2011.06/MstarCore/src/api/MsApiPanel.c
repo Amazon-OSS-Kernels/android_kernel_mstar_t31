@@ -940,11 +940,12 @@ int do_backLight_on(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 #define DUAL_SPI  0 // use two spi channel to send data
 
 /* APE5030 Vars. */
-#define DEVICE_NUM 6
+#define MAX_DEVICE_NUM 6
 static MS_U8 buffer[3] = {0};
-static MS_U8 u8TailZero[DEVICE_NUM]={0};
+static MS_U8 u8TailZero[MAX_DEVICE_NUM]={0};
 
-//For APE5030, device_num = 6
+//For APE5030, max device_num = 6
+static MS_U8 g_u8Ape5030_dev_num = 0;
 static MS_U16 g_u16LED_CMD_CUR_ON_1[6] = {0};
 static MS_U16 g_u16LED_CMD_CUR_ON_2[6] = {0};
 static MS_U16 g_u16LED_CMD_FAULT_1[6] = {0};
@@ -1000,9 +1001,9 @@ int MSPI_Write_SingleAPE5030_SingleData(int u8DeiveID,int u8RegisterAddr, int u8
     // 3. Send SPI command
     MDrv_MSPI_SlaveEnable(true);
     MDrv_MSPI_Write(buffer,3);
-    if((DEVICE_NUM-1) > 0)
+    if((g_u8Ape5030_dev_num - 1) > 0)
     {
-        MDrv_MSPI_Write(u8TailZero,DEVICE_NUM-1);
+        MDrv_MSPI_Write(u8TailZero, g_u8Ape5030_dev_num - 1);
     }
 
     MDrv_MSPI_SlaveEnable(false);
@@ -1020,10 +1021,9 @@ int MSPI_Read_APE5030_SingleData(int u8deviceidx,int u8RegisterAddr)
 
     MDrv_MSPI_SlaveEnable(true);
     MDrv_MSPI_Write(buffer,2);
-    //if((DEVICE_NUM-1) > 0)
-    {
-        MDrv_MSPI_Write(u8TailZero,DEVICE_NUM);
-    }
+
+    MDrv_MSPI_Write(u8TailZero, g_u8Ape5030_dev_num);
+
     MDrv_MSPI_Read(&pu8InputdData,1);
     MDrv_MSPI_SlaveEnable(false);
 
@@ -1042,9 +1042,9 @@ void MSPI_Write_AllAPE5030_SingleData(int u8RegisterAddr, int u8InputdData)
     // 3. Send SPI command
     MDrv_MSPI_SlaveEnable(true);
     MDrv_MSPI_Write(buffer,3);
-    if((DEVICE_NUM-1) > 0)
+    if((g_u8Ape5030_dev_num - 1) > 0)
     {
-        MDrv_MSPI_Write(u8TailZero,DEVICE_NUM-1);
+        MDrv_MSPI_Write(u8TailZero, g_u8Ape5030_dev_num - 1);
     }
 
     MDrv_MSPI_SlaveEnable(false);
@@ -1060,7 +1060,7 @@ void APE5030_Init(void)
     //Please see init excel of APE5030....
 
     //FAULT_1
-    for(i = 0; i < DEVICE_NUM; i++)
+    for(i = 0; i < g_u8Ape5030_dev_num; i++)
     {
         MSPI_Write_SingleAPE5030_SingleData((i+1), 0x03, g_u16LED_CMD_FAULT_1[i]);
     }
@@ -1070,7 +1070,7 @@ void APE5030_Init(void)
     MSPI_Write_AllAPE5030_SingleData(0x06,0x00);//FB_SEL2
 
     //CURR_CTRL
-    for(i = 0; i < DEVICE_NUM; i++)
+    for(i = 0; i < g_u8Ape5030_dev_num; i++)
     {
         MSPI_Write_SingleAPE5030_SingleData((i+1), 0x07, g_u16LED_CMD_CURR_CTRL[i]);
     }
@@ -1079,13 +1079,13 @@ void APE5030_Init(void)
     MSPI_Write_AllAPE5030_SingleData(0x0C,0x94);//VDAC_H
 
     //FB_ON_1
-    for(i = 0; i < DEVICE_NUM; i++)
+    for(i = 0; i < g_u8Ape5030_dev_num; i++)
     {
         MSPI_Write_SingleAPE5030_SingleData((i+1), 0x0E, g_u16LED_CMD_FB_ON_1[i]);
     }
 
     //FB_ON_2
-    for(i = 0; i < DEVICE_NUM; i++)
+    for(i = 0; i < g_u8Ape5030_dev_num; i++)
     {
         MSPI_Write_SingleAPE5030_SingleData((i+1), 0x0F, g_u16LED_CMD_FB_ON_2[i]);
     }
@@ -1098,7 +1098,7 @@ void APE5030_Init(void)
     MSPI_Write_AllAPE5030_SingleData(0x15,0x07);//RETRIAL_TIMEH
 
     //PWM1_DLY ~ PWM16_DLY (reg 0x16 ~ 0x35)
-    for(i = 0; i < DEVICE_NUM; i++)
+    for(i = 0; i < g_u8Ape5030_dev_num; i++)
     {
         MSPI_Write_SingleAPE5030_SingleData((i+1), 0x16, g_u16LED_CMD_PWM1_DLY_L[i]);
         MSPI_Write_SingleAPE5030_SingleData((i+1), 0x17, g_u16LED_CMD_PWM1_DLY_H[i]);
@@ -1177,7 +1177,7 @@ void APE5030_Init(void)
     MSPI_Write_AllAPE5030_SingleData(0x63,0x02); //BIST_CTRL_1
 
     //SHORT_COMP_CTRL_1
-    for(i = 0; i < DEVICE_NUM; i++)
+    for(i = 0; i < g_u8Ape5030_dev_num; i++)
     {
         MSPI_Write_SingleAPE5030_SingleData((i+1), 0x64, g_u16LED_CMD_SHORT_COMP_CTRL_1[i]);
     }
@@ -1196,13 +1196,13 @@ void APE5030_Init(void)
     else
     {
         //CUR_ON_1
-        for(i = 0; i < DEVICE_NUM; i++)
+        for(i = 0; i < g_u8Ape5030_dev_num; i++)
         {
             MSPI_Write_SingleAPE5030_SingleData((i+1), 0x01, g_u16LED_CMD_CUR_ON_1[i]);
         }
 
         //CUR_ON_2
-        for(i = 0; i < DEVICE_NUM; i++)
+        for(i = 0; i < g_u8Ape5030_dev_num; i++)
         {
             MSPI_Write_SingleAPE5030_SingleData((i+1), 0x02, g_u16LED_CMD_CUR_ON_2[i]);
         }
@@ -1302,6 +1302,8 @@ int do_local_dimming( cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 
     if(device_info.bAPE5030 == 1)
     {
+        g_u8Ape5030_dev_num = device_info.u8Ape5030_dev_num;
+
         // Wait APE5030 power on
         while(true)
         {
@@ -1326,7 +1328,7 @@ int do_local_dimming( cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
         }
 
         // prepare specific register value from ini.
-        for(i = 0 ; i < 6 ; i++)
+        for(i = 0 ;i < g_u8Ape5030_dev_num; i++)
         {
             g_u16LED_CMD_CUR_ON_1[i] = device_info.u16LED_CMD_CUR_ON_1[i];
             g_u16LED_CMD_CUR_ON_2[i] = device_info.u16LED_CMD_CUR_ON_2[i];
@@ -1430,110 +1432,7 @@ int do_local_dimming( cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
         }
         MDrv_PWM_ResetEn(LOCAL_DIMMING_PWM_CH,true);
     }
-
-/*  // now no use the LDM function in mboot stage
-    //LDF addr calc
-    if(120 == dma_info.u8ClkHz)  //120Hz panel
-    {
-        LDF_pack_per_row = ((dma_info.u8LDFWidth/2 *4 - 1) / MHAL_LD_PACKLENGTH) + 1;
-    }
-    else
-    {
-        LDF_pack_per_row = ((dma_info.u8LDFWidth *4 - 1) / MHAL_LD_PACKLENGTH) + 1;
-    }
-    LDF_mem_size = LDF_pack_per_row * MHAL_LD_PACKLENGTH * MHAL_LD_PACKLENGTH;
-    LDF_mem_size = ((LDF_mem_size + 0xFF) >> LDFALIGN) << LDFALIGN; // align at 0x100
-
-    LDFAddr_L0 = BaseAddr/MHAL_LD_PACKLENGTH;
-    LDFAddr_L1 = (BaseAddr + LDF_mem_size)/MHAL_LD_PACKLENGTH;
-    if (120 == dma_info.u8ClkHz)
-    {
-        LDFAddr_R0 = (BaseAddr + 2*LDF_mem_size)/MHAL_LD_PACKLENGTH;
-        LDFAddr_R1 = (BaseAddr + 3*LDF_mem_size)/MHAL_LD_PACKLENGTH;
-    }
-    else
-    {
-        LDFAddr_R0 = LDFAddr_L0;
-        LDFAddr_R1 = LDFAddr_L1;
-    }
-
-    //LDB addr calc
-    if(120 == dma_info.u8ClkHz)  //120Hz panel
-    {
-        u8LDBWidth = dma_info.bEdge2DEn
-                      ? (dma_info.eLEDType == E_LD_EDGE_LR_TYPE ? dma_info.u8LEDHeight: dma_info.u8LEDWidth)
-                      : dma_info.u8LEDWidth/2 + 1;
-    }
-    else
-    {
-        u8LDBWidth = dma_info.bEdge2DEn
-                      ? (dma_info.eLEDType == E_LD_EDGE_LR_TYPE ? dma_info.u8LEDHeight: dma_info.u8LEDWidth)
-                      : dma_info.u8LEDWidth;
-    }
-
-    u8LDBHeight = dma_info.bEdge2DEn
-                   ? (dma_info.eLEDType == E_LD_EDGE_LR_TYPE ? dma_info.u8LEDWidth : dma_info.u8LEDHeight)
-                   : dma_info.u8LEDHeight;
-    LDB_pack_per_row = (dma_info.bEdge2DEn && dma_info.eLEDType == E_LD_LOCAL_TYPE) ? 2 :
-                                ((u8LDBWidth - 1) / MHAL_LD_PACKLENGTH) + 1;
-
-    if(120 == dma_info.u8ClkHz)
-    {
-        LDBBaseAddr = BaseAddr + 4*LDF_mem_size;
-        Edge2DBaseAddr = LDBBaseAddr + 4*LDB_mem_size;
-    }
-    else
-    {
-        LDBBaseAddr = BaseAddr + 2*LDF_mem_size;
-        Edge2DBaseAddr = LDBBaseAddr + 2*LDB_mem_size;
-    }
-
-    LDBAddr_L0 = LDBBaseAddr / MHAL_LD_PACKLENGTH;
-    LDBAddr_L1 = (LDBBaseAddr + LDB_mem_size)/ MHAL_LD_PACKLENGTH;
-    if (120 == dma_info.u8ClkHz)
-    {
-        LDBAddr_R0 = (LDBBaseAddr + 2*LDB_mem_size) / MHAL_LD_PACKLENGTH;
-        LDBAddr_R1 = (LDBBaseAddr + 3*LDB_mem_size) / MHAL_LD_PACKLENGTH;
-    }
-    else
-    {
-        LDBAddr_R0 = LDBAddr_L0;
-        LDBAddr_R1 = LDBAddr_L1;
-    }
-    DMABaseOffset = (LDFAddr_L0*0x20) + LD_BIN_LENGTH - (LDBAddr_L0*0x20);
-
-    pLEDVirBuffer = (MS_U8 *)MS_PA2KSEG1(BaseAddr + LD_BIN_LENGTH);
-    LEDVirBufferSize = LD_BIN_LENGTH;
-    memset(pLEDVirBuffer, u8Bright, LEDVirBufferSize);    //set Bright value to LED buffer
-
-    UBOOT_DEBUG("LDFAddr_L0 = 0x%llx\n", LDFAddr_L0);
-    UBOOT_DEBUG("LDBAddr_L0 = 0x%llx\n", LDBAddr_L0);
-    UBOOT_DEBUG("pLEDVirBuffer addr = 0x%lx\n", (MS_U32)pLEDVirBuffer);
-    UBOOT_DEBUG("LEDVirBufferSize = 0x%lx\n", LEDVirBufferSize);
-    UBOOT_DEBUG("u8Bright = 0x%x\n", u8Bright);
-
-    MDrv_LDMA_Init(dma_info.u8LDMAchanel, dma_info.u8ClkHz);
-    MDrv_LDMA_SetMenuloadNumber(dma_info.u8LDMAchanel, dma_info.u16LedNum);
-    MDrv_LDMA_SetSPICommandFormat(dma_info.u8LDMAchanel, dma_info.u8cmdlength, dma_info.u16MspiHead);
-    MDrv_LDMA_SetCheckSumMode(dma_info.u8LDMAchanel, dma_info.u8LDMACheckSumMode);
-    MDrv_LDMA_SetSpiTriggerMode(dma_info.u8LDMAchanel, dma_info.u8LDMATrimode);
-    MDrv_LDMA_SetTrigDelay(dma_info.u8LDMAchanel, dma_info.u16DMADelay);
-    MDrv_LDMA_EnableCS(dma_info.u8LDMAchanel, true);
-    MDrv_LDMA_LD_SetLDFAddr(0, LDFAddr_L0, LDFAddr_R0);
-    MDrv_LDMA_LD_SetLDFAddr(1, LDFAddr_L1, LDFAddr_R1);
-    MDrv_LDMA_LD_SetLDBAddr(0, LDBAddr_L0, LDBAddr_R0);
-    MDrv_LDMA_LD_SetLDBAddr(1, LDBAddr_L1, LDBAddr_R1);
-    MDrv_LDMA_LD_SetEdge2DAddr(Edge2DBaseAddr/MHAL_LD_PACKLENGTH);
-    MDrv_LDMA_LD_SetLEDBufBaseOffset(DMABaseOffset/MHAL_LD_PACKLENGTH);
-    MDrv_LDMA_LD_SetMIUPackOffset(dma_info.u8LDMAchanel, 0);
-    MDrv_LDMA_LD_SetMIUPackLength(dma_info.u8LDMAchanel, dma_info.u8LEDWidth -1);
-    MDrv_LDMA_LD_SetYoffEnd(dma_info.u8LDMAchanel, dma_info.u8LEDHeight -1);
-    MDrv_LDMA_LD_SetBlHeightDMA(dma_info.u8LEDHeight -1);
-    MDrv_LDMA_LD_SetBlWidthDMA(dma_info.u8LEDWidth -1);
-    MDrv_LDMA_LD_SetDmaEnable(dma_info.u8LDMAchanel, true);
-    MDrv_LDMA_LD_Enable(true);
-    MDrv_LDM_Init(0x0);
-*/
+	mdrv_gpio_set_high(PAD_PWM1);
     UBOOT_TRACE("OK\n");
     return 0;
 }

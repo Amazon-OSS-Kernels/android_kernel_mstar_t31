@@ -380,11 +380,17 @@ void fix_shrunk_userdata()
 #endif
 #if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_BRANDENBURG)
         "brandenburg_pvt_4",
-        "kayla_hvt",
+        "ABC_hvt",
 #endif
 #if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ANNA)
         "anna_pvt",
-        "buzzard_pvt",
+        "ABC_pvt",
+#endif
+#if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_DUCKIE)
+        "corleone_pvt",
+        "corleone_p_pvt",
+        "corleone_r_pvt",
+        "corleone_two_pvt",
 #endif
     };
 
@@ -1426,12 +1432,12 @@ int do_config_gpio (cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
        GPIO8_PM DEFAULT : INPUT mode
        ABC(brandenburg) + suecreek : GPIO OUTPUT LOW
        ABC(brandenburg) + mt8570 : N/A
-       Kayla + suecreek : N/A
-       Kayla + mt8570 : GPIO INPUT
+       ABC + suecreek : N/A
+       ABC + mt8570 : GPIO INPUT
        */
 
-    /* config name of Kayla is brandenburg_kayla_xvt */
-    if (strstr(s_ConfigName, "brandenburg") && !strstr(s_ConfigName, "kayla"))
+    /* config name of ABC is brandenburg_ABC_xvt */
+    if (strstr(s_ConfigName, "brandenburg") && !strstr(s_ConfigName, "ABC"))
     {
         UBOOT_DEBUG("re-config GPIO8_PM to output mode and lo for BBURG\n");
         MDrv_WriteByte(PAD_GPIO8_PM_OEN, (MDrv_ReadByte(PAD_GPIO8_PM_OEN) & ~BITMASK1_0) | GPIO_OUT_LOW);

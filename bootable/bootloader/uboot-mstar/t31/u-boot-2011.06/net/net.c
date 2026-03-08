@@ -1432,6 +1432,10 @@ NetReceive(volatile uchar *inpkt, int len)
 		/*
 		 *	Got a 802 packet.  Check the other protocol field.
 		 */
+		/* too small packet? */
+		if (len < E802_HDR_SIZE)
+			return;
+
 		x = ntohs(et->et_prot);
 
 		ip = (IP_t *)(inpkt + E802_HDR_SIZE);

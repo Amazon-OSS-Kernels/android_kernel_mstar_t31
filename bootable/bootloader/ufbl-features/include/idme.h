@@ -2,11 +2,13 @@
   * Copyright (C) 2015 - 2022 Amazon.com Inc. or its affiliates.  All Rights Reserved.
 */
 #ifdef SUPPORT_UBOOT
+#ifndef UFBL_PLATFORM_AML
 #include <common.h>
+#endif
 #include <config.h>
 #if !defined(UFBL_PROJ_ABC) && !defined(UFBL_PROJ_ABC) && !defined(UFBL_PROJ_ABC) \
     && !defined(UFBL_PROJ_SOPHIA) && !defined(UFBL_PROJ_ABC) && !defined(UFBL_PLAT_MTK_T31) \
-    && !defined(UFBL_PLAT_MTK_MT9022)
+    && !defined(UFBL_PLAT_MTK_MT9022) && !defined(UFBL_PLATFORM_AML)
 #include <vsprintf.h>
 #endif
 #include <linux/string.h>
@@ -37,7 +39,7 @@ int fastboot_idme(const char *cmd);
  * @brief Macro definition for fastboot_info and fastboot_fail, which have
  *        different parameter on different platform
  */
-#if defined(UFBL_PROJ_ABC) || defined(UFBL_PROJ_ABC)
+#if defined(UFBL_PROJ_ABC) || defined(UFBL_PROJ_ABC) || defined(UFBL_PROJ_ABC)
 #define UFBL_FASTBOOT_FAIL(response,buf) \
 	fastboot_info(buf,response)
 #define UFBL_FASTBOOT_INFO(response,buf) \

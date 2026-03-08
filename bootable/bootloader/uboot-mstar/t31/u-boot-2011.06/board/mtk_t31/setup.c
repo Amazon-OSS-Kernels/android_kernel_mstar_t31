@@ -208,10 +208,27 @@ int amzn_boot(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[])
                    mdelay(3000);
 
 #elif defined(CONFIG_DIAG_TRANSITION_DIALOG)
-                // remove MPOOL to clean up env
-                run_command("mmc erase.p MPOOL", 0);
+                char config_name_buf[32] = {0};
 
-                run_command("initenv", 0);
+                idme_get_var_external("config_name", config_name_buf, (sizeof(config_name_buf) - 1));
+                if (strstr(config_name_buf, "harrisa") != NULL || strstr(config_name_buf, "haileyplus_m") != NULL)
+                {
+                    UBOOT_DEBUG("harrisa or ABC model, config_name: %s\n", config_name_buf);
+                    // Turn on panel before erasing MPOOL
+                    run_command("dbtable_init", 0);
+                    run_command("panel_pre_init", 0);
+                    run_command("panel_post_init", 0);
+
+                    // remove MPOOL to clean up env
+                    run_command("mmc erase.p MPOOL", 0);
+                }
+                else
+                {
+                    // remove MPOOL to clean up env
+                    run_command("mmc erase.p MPOOL", 0);
+                    run_command("initenv", 0);
+                }
+
 
                 #define CMD_BUF 128
                 #define GWIN_WIDTH              720
@@ -253,7 +270,15 @@ int amzn_boot(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[])
                 run_command(buffer, 0);
 
                 memset(buffer, 0 , CMD_BUF);
-                snprintf(buffer, CMD_BUF, "draw_string %d %d 0x3fffffff 0 OK", GRAPHIC_X, GRAPHIC_Y);
+		snprintf(buffer, CMD_BUF, "draw_string %d %d 0x3fffffff 0 OK", GRAPHIC_X, GRAPHIC_Y);
+#if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ANNA) || defined(CONFIG_MTK_BD_MT164B_10AT_M7632_BRANDENBURG) || defined (CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC)
+                memset(buffer, 0, CMD_BUF);
+		if (anti_rb_enabled()) {
+			snprintf(buffer, CMD_BUF, "draw_string %d %d 0x300000000 0 LOCKED", 290, 250);
+		} else {
+			snprintf(buffer, CMD_BUF, "draw_string %d %d 0x300000000 0 UNLOCKED", 290, 250);
+		}
+#endif
                 run_command(buffer, 0);
 #endif
                 memset(buffer, 0 , CMD_BUF);
@@ -508,8 +533,8 @@ sbvc_result sboot_version_check(uchar* sboot_buf, int sboot_len)
 	prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "skipper", PROD_LEN);
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ANNA)
 	prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "anna", PROD_LEN);
-#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ABC)
-        prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "ABC", PROD_LEN);
+#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_TEDDY)
+        prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "teddy", PROD_LEN);
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_HAILEY)
 	prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "hailey", PROD_LEN);
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_JULIANA)
@@ -571,6 +596,19 @@ sbvc_result sboot_version_check(uchar* sboot_buf, int sboot_len)
 	if (sboot_ver == sboot_ver_dev) {
 		free(sboot_dev);
 		return SBVC_SAME_VER;
+	} else { /*different version, check anti-rollback version bump point*/
+		unsigned short version_bump = 0;
+#if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_BRANDENBURG)
+		version_bump = 0x22;
+#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ANNA)
+		version_bump = 0x17;
+#elif defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC)
+		version_bump = 0x05;
+#endif
+		if ((version_bump != 0) && (sboot_ver_dev >= version_bump) && (sboot_ver < version_bump )) {
+			free(sboot_dev);
+			return SBVC_ROLLBACK;
+		}
 	}
 	free(sboot_dev);
 

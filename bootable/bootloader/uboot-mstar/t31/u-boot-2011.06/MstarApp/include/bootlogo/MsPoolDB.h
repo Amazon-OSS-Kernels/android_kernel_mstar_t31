@@ -294,7 +294,8 @@ typedef struct
     MS_BOOL bAPE5030; //APE5030
     MS_BOOL bMCUswmode; //MCU sw mode
 
-    //For APE5030, device_num = 6
+    //For APE5030, max device_num = 6
+    MS_U8  u8Ape5030_dev_num;
     MS_U16 u16LED_CMD_CUR_ON_1[6];
     MS_U16 u16LED_CMD_CUR_ON_2[6];
     MS_U16 u16LED_CMD_FAULT_1[6];

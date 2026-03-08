@@ -5661,6 +5661,10 @@ static int parse_ldm_led_device_ini(char *path, ST_DRV_LD_LED_DEVICE_INFO *p_dat
     UBOOT_DEBUG("bMCUswmode = %ld \n",n);
     p_data->bMCUswmode = n;
 
+    n = Profile_GetInteger(LDM_SECTION_NAME, "u8Ape5030_dev_num", 6);
+    UBOOT_DEBUG("u8Ape5030_dev_num = %ld \n",n);
+    p_data->u8Ape5030_dev_num = n;
+
     if(Profile_GetString(LDM_SECTION_NAME, "u16LED_CMD_CUR_ON_1[6]", "", str, sizearray(str)))
     {
         Str2U16Array(str, p_data->u16LED_CMD_CUR_ON_1);
@@ -5863,15 +5867,20 @@ int Load_LDMPara_ToFlash(U32 u32DbtableOffset)
             if(device_info.bAPE5030 == 1)
             {
                 char strApe5030_ch_map[BUFFER_SIZE];
+                char strApe5030_dev_num[BUFFER_SIZE];
+
                 UBOOT_INFO("set boot env ldm_led_device_name to be APE5030.\n");
                 setenv("ldm_led_device_name", "ape5030");
-                snprintf(strApe5030_ch_map, sizeof(strApe5030_ch_map), "%x:%x:%x:%x:%x:%x:%x:%x:%x:%x:%x:%x",
+
+                snprintf(strApe5030_ch_map, sizeof(strApe5030_ch_map), "%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
                         device_info.u16LED_CMD_CUR_ON_1[0], device_info.u16LED_CMD_CUR_ON_1[1], device_info.u16LED_CMD_CUR_ON_1[2], device_info.u16LED_CMD_CUR_ON_1[3],
                         device_info.u16LED_CMD_CUR_ON_1[4], device_info.u16LED_CMD_CUR_ON_1[5], \
                         device_info.u16LED_CMD_CUR_ON_2[0], device_info.u16LED_CMD_CUR_ON_2[1], \
                         device_info.u16LED_CMD_CUR_ON_2[2], device_info.u16LED_CMD_CUR_ON_2[3], device_info.u16LED_CMD_CUR_ON_2[4], device_info.u16LED_CMD_CUR_ON_2[5]);
-
                 setenv("ape5030_ch_map", strApe5030_ch_map);
+
+                snprintf(strApe5030_dev_num, sizeof(strApe5030_dev_num), "%d", device_info.u8Ape5030_dev_num);
+                setenv("ape5030_dev_num", strApe5030_dev_num);
             }
 
             UBOOT_DEBUG("mspi_info size =: 0x%08x \n",sizeof(mspi_info));
