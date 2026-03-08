@@ -211,7 +211,9 @@ int amzn_boot(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[])
                 char config_name_buf[32] = {0};
 
                 idme_get_var_external("config_name", config_name_buf, (sizeof(config_name_buf) - 1));
-                if (strstr(config_name_buf, "harrisa") != NULL || strstr(config_name_buf, "haileyplus_m") != NULL)
+                if ( strstr(config_name_buf, "harrisa") != NULL ||
+                     strstr(config_name_buf, "haileyplus_m") != NULL ||
+                     strstr(config_name_buf, "harissa65") != NULL )
                 {
                     UBOOT_DEBUG("harrisa or ABC model, config_name: %s\n", config_name_buf);
                     // Turn on panel before erasing MPOOL
@@ -533,8 +535,8 @@ sbvc_result sboot_version_check(uchar* sboot_buf, int sboot_len)
 	prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "skipper", PROD_LEN);
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ANNA)
 	prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "anna", PROD_LEN);
-#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ABC)
-        prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "ABC", PROD_LEN);
+#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_TEDDY)
+        prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "teddy", PROD_LEN);
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_HAILEY)
 	prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "hailey", PROD_LEN);
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_JULIANA)
