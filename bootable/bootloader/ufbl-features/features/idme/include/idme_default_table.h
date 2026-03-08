@@ -135,8 +135,8 @@
 #include "idme_default_table_ABC.h"
 #endif
 
-#if defined(UFBL_PROJ_abc123)
-#include "idme_default_table_abc123.h"
+#if defined(UFBL_PROJ_ABC)
+#include "idme_default_table_ABC.h"
 #endif
 
 #if defined(UFBL_PROJ_ABC)
@@ -175,8 +175,8 @@
 #include "idme_default_table_ABCbo.h"
 #endif
 
-#if defined(UFBL_PROJ_HAZEL)
-#include "idme_default_table_hazel.h"
+#if defined(UFBL_PROJ_ABC)
+#include "idme_default_table_ABC.h"
 #endif
 
 #if defined(UFBL_PROJ_ABC)

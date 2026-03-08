@@ -2168,20 +2168,20 @@ int do_boot_led_init(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
         if ((factory_reset_mode == 1) && (strncmp(led_config, "1", 1) == 0))
         {
             UBOOT_INFO("led_config=1 and doing factory rest then blink green led");
-            run_command("led_pwm_pattern DARK_1_ABC123", 0);
+            run_command("led_pwm_pattern DARK_1_BOXER", 0);
             udelay(5000);
-            run_command("led_pwm_pattern BLINK_500_2_ABC123", 0);
+            run_command("led_pwm_pattern BLINK_500_2_BOXER", 0);
         }
         else
         {
             UBOOT_INFO("Normal boot then blink red led");
-            run_command("led_pwm_pattern BLINK_500_1_ABC123", 0);
+            run_command("led_pwm_pattern BLINK_500_1_BOXER", 0);
         }
     }
     else
     {
         UBOOT_INFO("quiescent_mode boot then keep red led light");
-        run_command("led_pwm_pattern LIGHT_1_ABC123", 0);
+        run_command("led_pwm_pattern LIGHT_1_BOXER", 0);
     }
 #else
     if (is_quiescent_mode() == 1) {

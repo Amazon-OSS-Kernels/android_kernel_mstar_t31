@@ -386,6 +386,12 @@ void fix_shrunk_userdata()
         "anna_pvt",
         "buzzard_pvt",
 #endif
+#if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_DUCKIE)
+        "corleone_pvt",
+        "corleone_p_pvt",
+        "corleone_r_pvt",
+        "corleone_two_pvt",
+#endif
     };
 
     idme_get_var_external("config_name", sConfigName, (BUFFER_SIZE - 1));

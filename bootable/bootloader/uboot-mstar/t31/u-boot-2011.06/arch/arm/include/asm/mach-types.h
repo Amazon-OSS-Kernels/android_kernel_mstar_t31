@@ -348,7 +348,7 @@ extern unsigned int __machine_arch_type;
 #define MACH_TYPE_TA7V                 335
 #define MACH_TYPE_ICARUS               336
 #define MACH_TYPE_H1900                337
-#define MACH_TYPE_ABC               338
+#define MACH_TYPE_GEMINI               338
 #define MACH_TYPE_AXIM                 339
 #define MACH_TYPE_AUDIOTRON            340
 #define MACH_TYPE_H2200                341
@@ -2247,7 +2247,7 @@ extern unsigned int __machine_arch_type;
 #define MACH_TYPE_ORATISCOMU           2263
 #define MACH_TYPE_RTSBC20              2264
 #define MACH_TYPE_I780                 2265
-#define MACH_TYPE_ABC324            2266
+#define MACH_TYPE_GEMINI324            2266
 #define MACH_TYPE_ORATISLAN            2267
 #define MACH_TYPE_ORATISALOG           2268
 #define MACH_TYPE_ORATISMADI           2269
@@ -7345,16 +7345,16 @@ extern unsigned int __machine_arch_type;
 # define machine_is_h1900()	(0)
 #endif
 
-#ifdef CONFIG_SA1100_ABC
+#ifdef CONFIG_SA1100_GEMINI
 # ifdef machine_arch_type
 #  undef machine_arch_type
 #  define machine_arch_type	__machine_arch_type
 # else
-#  define machine_arch_type	MACH_TYPE_ABC
+#  define machine_arch_type	MACH_TYPE_GEMINI
 # endif
-# define machine_is_ABC()	(machine_arch_type == MACH_TYPE_ABC)
+# define machine_is_gemini()	(machine_arch_type == MACH_TYPE_GEMINI)
 #else
-# define machine_is_ABC()	(0)
+# define machine_is_gemini()	(0)
 #endif
 
 #ifdef CONFIG_ARCH_AXIM
@@ -30133,16 +30133,16 @@ extern unsigned int __machine_arch_type;
 # define machine_is_sgh_i780()	(0)
 #endif
 
-#ifdef CONFIG_MACH_ABC324
+#ifdef CONFIG_MACH_GEMINI324
 # ifdef machine_arch_type
 #  undef machine_arch_type
 #  define machine_arch_type	__machine_arch_type
 # else
-#  define machine_arch_type	MACH_TYPE_ABC324
+#  define machine_arch_type	MACH_TYPE_GEMINI324
 # endif
-# define machine_is_ABC324()	(machine_arch_type == MACH_TYPE_ABC324)
+# define machine_is_gemini324()	(machine_arch_type == MACH_TYPE_GEMINI324)
 #else
-# define machine_is_ABC324()	(0)
+# define machine_is_gemini324()	(0)
 #endif
 
 #ifdef CONFIG_MACH_ORATISLAN
