@@ -56,8 +56,9 @@
 
 #define DEMURA_PARTITION_NAME           "demura"
 
-#define SPI_CLOCLK                      (40 * 1000 * 1000)   // 40MHz
+#define SPI_CLOCLK                      (5 * 1000 * 1000)   // 5MHz
 #define SPI_MODE                         0
+#define SPI_CH                           0
 
 #define ENV_DEMURA_IP                    "demura_ip"
 #define ENV_DEMURA_SIG                   "demura_sig"
@@ -66,6 +67,7 @@
 #define ENV_DEMURA_MSTAR_CRC_POS         "demura_ms_crc_pos"
 
 #define DEMURA_MMAP_ID                   "E_MMAP_ID_DEMURA"
+#define DEMURA_MMAP_ID_MI                "MI_DISPOUT_DEMURA"
 
 #ifdef CONFIG_DEMURA_URSA11
     #define CONVERT_BUFFER_SIZE           (72 * 1024 * 1024)   // 72MB
@@ -78,5 +80,7 @@
 #ifdef CONFIG_DEMURA_VENDOR_LGD
     #define CONFIG_DEMURA_LGD_DEMO       1
 #endif
+
+#define CONFIG_DEMURA_WITHOUT_MMC_PART    1
 
 #endif
