@@ -533,8 +533,8 @@ sbvc_result sboot_version_check(uchar* sboot_buf, int sboot_len)
 	prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "skipper", PROD_LEN);
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ANNA)
 	prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "anna", PROD_LEN);
-#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ABC)
-        prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "ABC", PROD_LEN);
+#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_TEDDY)
+        prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "teddy", PROD_LEN);
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_HAILEY)
 	prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "hailey", PROD_LEN);
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_JULIANA)
