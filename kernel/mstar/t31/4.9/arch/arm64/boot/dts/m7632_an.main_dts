@@ -1192,7 +1192,7 @@
 		switch-inverse = <0>;
 		switch-inverse_164b = <0>;
 		switch-inverse_brandenburg = <1>;
-		switch-inverse_kayla = <1>;
+		switch-inverse_abc123 = <1>;
 		switch-inverse_skipper = <1>;
 		/* Switch gpio shares pin with debug port, use debug on gpio to select */
 		share-pin-ctrl-gpio = <64>;
@@ -1222,13 +1222,13 @@
 		irblaster-ctrl_haileyplus = <167>;
 		irblaster-ctrl_shelly = <167>;
 		irblaster-enable_brandenburg = <1>;
-		irblaster-enable_kayla = <1>;
+		irblaster-enable_abc123 = <1>;
 		irblaster-enable_skipper = <1>;
 		irblaster-enable_hailey = <0>;
 		irblaster-enable_haileyplus = <1>;
 		irblaster-enable_shelly = <1>;
 		irblaster-pwm_brandenburg = <3>;
-		irblaster-pwm_kayla = <3>;
+		irblaster-pwm_abc123 = <3>;
 		irblaster-pwm_skipper = <3>;
 		irblaster-pwm_hailey = <2>;
 		irblaster-pwm_haileyplus = <2>;
@@ -1252,7 +1252,7 @@
 		default-brightness-level = <255>;
 		bl_ctrl = <6>;
 		bl_ctrl_brandenburg = <120>;
-		bl_ctrl_kayla = <120>;
+		bl_ctrl_abc123 = <120>;
 		bl_ctrl_hailey = <120>;
 		bl_ctrl_haileyplus = <120>;
 		bl_ctrl_shelly = <120>;
@@ -1725,8 +1725,23 @@
         compatible = "mediatek,hifi4dsp-wdt";
 		dsp-wdt-gpio = <7>;
 		dsp-wdt-inverse = <0>;
-		dsp-wdt-inverse_kayla = <1>;
-		dsp-wdt-inverse_kaylaeu = <1>;
+		dsp-wdt-inverse_abc123 = <1>;
+		dsp-wdt-inverse_abc123eu = <1>;
     };
+
+	dsp_mt8570 {
+		compatible = "amazon,dsp_mt8570";
+		host-irq-gpio = <10>;
+		reset-gpio = <42>;
+		wdt-irq-gpio = <7>;
+		dsp-wdt-inverse = <0>;
+		dsp-wdt-inverse_abc123 = <1>;
+		dsp-wdt-inverse_abc123eu = <1>;
+	};
+
+	adf_dsp {
+		compatible = "amazon,adf-dsp-driver";
+		status = "okay";
+	};
 
 };
