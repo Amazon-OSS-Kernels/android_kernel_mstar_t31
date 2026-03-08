@@ -187,7 +187,7 @@
                                                                         //CONFIG_PADMUX_MODE2: 2-wired MSPI at PM
 #define PADS_LD_SPI2_CONFIG                     DISABLE                 //CONFIG_PADMUX_MODE1: 2-wired MSPI
                                                                         //CONFIG_PADMUX_MODE2: 2-wired MSPI at PM
-#define PADS_LD_SPI3_CONFIG                     CONFIG_PADMUX_MODE1     //CONFIG_PADMUX_MODE1: 4wired MSPI for LXX FCIC/DEMURA or CHN Local Dimming
+#define PADS_LD_SPI3_CONFIG                     CONFIG_PADMUX_MODE2     //CONFIG_PADMUX_MODE1: 4wired MSPI for LXX FCIC/DEMURA or CHN Local Dimming
                                                                         //CONFIG_PADMUX_MODE2: 4wire mspi for CHN Demura
                                                                         //CONFIG_PADMUX_MODE3: 4-wired MSPI at PM
 #define PADS_MSPI0_CONFIG                       DISABLE                 //CONFIG_PADMUX_MODE1: MSPI0
@@ -251,8 +251,8 @@
                                                                         //CONFIG_PADMUX_MODE3: IRE
 #define PADS_DDCRMODE                           DISABLE                 //CONFIG_PADMUX_MODE1: DDCR
                                                                         //CONFIG_PADMUX_MODE2: MIIC3
-#define PADS_MIIC_MODE0                         CONFIG_PADMUX_MODE3     //CONFIG_PADMUX_MODE1: MIIC0
-#define PADS_MIIC_MODE1                         DISABLE                 //CONFIG_PADMUX_MODE1: MIIC1
+#define PADS_MIIC_MODE0                         CONFIG_PADMUX_MODE1     //CONFIG_PADMUX_MODE1: MIIC0
+#define PADS_MIIC_MODE1                         DISABLE     //CONFIG_PADMUX_MODE1: MIIC1
 #define PADS_MIIC_MODE2                         DISABLE                 //CONFIG_PADMUX_MODE1: MIIC2
                                                                         //CONFIG_PADMUX_MODE2: MIIC2
 #define PADS_MIIC_MODE4                         DISABLE                 //CONFIG_PADMUX_MODE1: MIIC4
@@ -319,7 +319,7 @@
 //Audio
 #define PAD_TCON4_IS_GPIO                       GPIO_OUT_LOW            //AMP control (Low: On / High : Mute)
 #define PADS_I2S_OUT_MCK_MD                     DISABLE                 //I2S
-#define PADS_I2S_OUT_MD                         CONFIG_PADMUX_MODE1     //I2S
+#define PADS_I2S_OUT_MD                         CONFIG_PADMUX_MODE3     //I2S
 #define PAD_GPIO12_IS_GPIO                      GPIO_IN                 //HP_DET
 #define PAD_PCM2_CE_N_IS_GPIO                   GPIO_OUT_LOW            //HP_AMP_EN, HW_ID=F only (Low: Mute / High : On)
 #define PAD_I2S_OUT_MCK_IS_GPIO                 GPIO_IN
@@ -379,7 +379,7 @@
 #define PAD_PCM2_IRQA_N_IS_GPIO                 GPIO_OUT_LOW
 
 //LD_SPI_CS
-#define PAD_LD_SPI_CS_IS_GPIO                   GPIO_OUT_LOW
+//#define PAD_LD_SPI_CS_IS_GPIO                   GPIO_OUT_LOW
 
 //=============================================================================
 //MIU info
