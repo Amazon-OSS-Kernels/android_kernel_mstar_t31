@@ -198,7 +198,7 @@ void lcd_printf(const char *fmt, ...)
 	char buf[CONFIG_SYS_PBSIZE];
 
 	va_start(args, fmt);
-	vsprintf(buf, fmt, args);
+	vsnprintf(buf, CONFIG_SYS_PBSIZE, fmt, args);
 	va_end(args);
 
 	lcd_puts(buf);

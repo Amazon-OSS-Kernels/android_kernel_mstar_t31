@@ -16,9 +16,9 @@ const char *amzn_target_device_name(void)
 #if defined(CONFIG_MTK_BD_MT164B_10AT_M7632) || defined(CONFIG_MTK_BD_MT164B_10AT_M7632_DUCKIE)
   return "duckie";  //ToDo: DUCKIE-2
 #elif defined(CONFIG_MSTAR_BD_M7322_G22)
-  return "greta";
-#elif defined(CONFIG_MSTAR_BD_M7322_G22_CLARA)
-  return "clara";
+  return "ABC";
+#elif defined(CONFIG_MSTAR_BD_M7322_G22_ABC)
+  return "ABC";
 #else
   #error "config TARGET DEVICE properly"
   return "invalid";
@@ -29,19 +29,19 @@ const char *amzn_target_device_name(void)
 
 #define SOPHIA_PROTO "00850001"
 #define SOPHIA_HVT   "00850002"
-#define GRETA_PROTO  "00860001"
-#define GRETA_HVT    "00860002"
+#define ABC_PROTO  "00860001"
+#define ABC_HVT    "00860002"
 
 int gpio_is_production()
 {
   char board_id[18] = {0};
 
-  /* prod pin is not ready on Sophia Proto/HVT and Greta HVT */
+  /* prod pin is not ready on Sophia Proto/HVT and ABC HVT */
   idme_get_var_external("board_id", board_id, sizeof(board_id)-1);
   if ( !strncmp(board_id, SOPHIA_PROTO, strlen(SOPHIA_PROTO)) ||
        !strncmp(board_id, SOPHIA_HVT, strlen(SOPHIA_HVT)) ||
-       !strncmp(board_id, GRETA_PROTO, strlen(GRETA_PROTO)) ||
-       !strncmp(board_id, GRETA_HVT, strlen(GRETA_HVT)) ) {
+       !strncmp(board_id, ABC_PROTO, strlen(ABC_PROTO)) ||
+       !strncmp(board_id, ABC_HVT, strlen(ABC_HVT)) ) {
           return 0;  /* engineering gpio */
   }
 

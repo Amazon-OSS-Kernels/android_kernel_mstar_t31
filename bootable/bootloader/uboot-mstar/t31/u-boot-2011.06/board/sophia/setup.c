@@ -306,14 +306,14 @@ sbvc_result sboot_version_check(uchar* sboot_buf, int sboot_len)
 		return SBVC_MARK_NOT_FOUND;
 	}
 
-	// sophia/steffi HW can only flash sophia/steffi build
-	// greta/clara HW can only flash greta/clara build
+	// sophia/abc123 HW can only flash sophia/abc123 build
+	// ABC/ABC HW can only flash ABC/ABC build
 #if defined(CONFIG_MSTAR_BD_M7322_MB170)|| defined(CONFIG_MSTAR_BD_M7322_MB175)
 	prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "sophia", PROD_LEN) ||
-			!strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "steffi", PROD_LEN);
-#elif defined(CONFIG_MSTAR_BD_M7322_G22) || defined(CONFIG_MSTAR_BD_M7322_G22_CLARA)
-	prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "greta", PROD_LEN) ||
-			!strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "clara", PROD_LEN);
+			!strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "abc123", PROD_LEN);
+#elif defined(CONFIG_MSTAR_BD_M7322_G22) || defined(CONFIG_MSTAR_BD_M7322_G22_ABC)
+	prod_match = !strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "ABC", PROD_LEN) ||
+			!strnicmp(sboot_buf+mark_loc+VER_MARK_LEN+VER_LEN, "ABC", PROD_LEN);
 #endif
 	if (!prod_match) {
 		printf("\n!!Device:%s, sboot:%.*s!!\n", amzn_target_device_name(), PROD_LEN,

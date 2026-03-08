@@ -176,7 +176,7 @@ MAPI_BOOL Power_On_Initialization(void)
     //DBG_DOMOD_MSB(printf(">>>MSB122x: Reset...\n"));
     //MSB122x_Reset();
     ReadReg(0x8000, &gu8ChipRevId);
-    DBG_DOMOD_MSB(printf(">>>MSB122x:ABC RevID:%x\n", gu8ChipRevId));
+    DBG_DOMOD_MSB(printf(">>>MSB122x:Gemini RevID:%x\n", gu8ChipRevId));
 
     return status;
 }

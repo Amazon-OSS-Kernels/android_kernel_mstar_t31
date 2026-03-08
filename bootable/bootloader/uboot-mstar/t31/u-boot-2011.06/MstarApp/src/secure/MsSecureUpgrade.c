@@ -347,7 +347,13 @@ int do_file_segment_rsa_authendication(cmd_tbl_t *cmdtp, int flag, int argc, cha
 
     //Read ***.hash.signature, and then do rsa decod
     memset(buffer,0,CMD_BUF);
-    snprintf(buffer, CMD_BUF, "filepartloadSegAES %s %s %x %s %x %x", TARGET_INTERFACE,TARGET_DEVICE,(U32)ptrSegmentBuf, TARGET_FILE, fileSignatureOffset, fileSignatureLen);
+    if (fileSignatureLen > gu8SegmentSize)
+        ret = snprintf(buffer, CMD_BUF, "filepartloadSegAES %s %s %x %s %x %x", TARGET_INTERFACE,TARGET_DEVICE,(U32)ptrSegmentBuf, TARGET_FILE, fileSignatureOffset, gu8SegmentSize);
+    else
+        ret = snprintf(buffer, CMD_BUF, "filepartloadSegAES %s %s %x %s %x %x", TARGET_INTERFACE,TARGET_DEVICE,(U32)ptrSegmentBuf, TARGET_FILE, fileSignatureOffset, fileSignatureLen);
+    if (ret > CMD_BUF)
+        UBOOT_ERROR("Cmd:'%s' buffer is not enough\n", buffer);
+
     if(run_command(buffer, 0)!=0)
     {          
         UBOOT_ERROR("Cmd:'%s' fail!!\n",buffer);

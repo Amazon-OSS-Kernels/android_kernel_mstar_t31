@@ -1831,9 +1831,10 @@ int RawData_Authentication(char *KLName,unsigned int u32kernelAddr)
 int _RawData_Authentication(char* KLName,unsigned int u32kernelAddr)
 {
     U32 kernelSize=0;
-    U8 u8ImagePublicKeyN[RSA_PUBLIC_KEY_N_LEN];
-    U8 u8ImagePublicKeyE[RSA_PUBLIC_KEY_E_LEN];
-    U8 u8ImageSignature[SIGNATURE_LEN];
+    U8 u8ImagePublicKeyN[RSA_PUBLIC_KEY_N_LEN]={0};
+    U8 u8ImagePublicKeyE[RSA_PUBLIC_KEY_E_LEN]={0};
+    U8 u8ImageSignature[SIGNATURE_LEN]={0};
+
     int ret=0;
     UBOOT_TRACE("IN\n");
     ret = IsRawDataPartition(KLName);
@@ -1860,9 +1861,18 @@ int _RawData_Authentication(char* KLName,unsigned int u32kernelAddr)
     }
     #endif//#if defined(CONFIG_SECURE_ENCRYPT_RAWDATA)
     flush_cache(u32kernelAddr,(U32)kernelSize);
-    GetPublicKeyN(E_RSA_IMAGE_PUBLIC_KEY, u8ImagePublicKeyN, sizeof(u8ImagePublicKeyN));
-    GetPublicKeyE(E_RSA_IMAGE_PUBLIC_KEY, u8ImagePublicKeyE, sizeof(u8ImagePublicKeyE));
-    GetSignature(KLName, 0, u8ImageSignature, sizeof(u8ImageSignature));
+    if (-1 == GetPublicKeyN(E_RSA_IMAGE_PUBLIC_KEY, u8ImagePublicKeyN, sizeof(u8ImagePublicKeyN)))
+    {
+        return -1;
+    }
+    if (-1 == GetPublicKeyE(E_RSA_IMAGE_PUBLIC_KEY, u8ImagePublicKeyE, sizeof(u8ImagePublicKeyE)))
+    {
+        return -1;
+    }
+    if (-1 == GetSignature(KLName, 0, u8ImageSignature, sizeof(u8ImageSignature)))
+    {
+        return -1;
+    }
     if (-1 == Secure_doAuthentication(u8ImagePublicKeyN, u8ImagePublicKeyE, u8ImageSignature, (U8 *)u32kernelAddr, kernelSize))
     {
         UBOOT_ERROR("\033[0;31m Auth  %s FAIL\033[0m\n",KLName);

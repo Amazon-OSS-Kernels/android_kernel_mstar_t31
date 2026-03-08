@@ -1,7 +1,7 @@
 /*
  * idme_default_table_mt9022.h
  *
- * Copyright 2011-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2011-2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  */
 
 /*!
@@ -151,6 +151,14 @@ const struct idme_init_values idme_default_values[] = {
 	{ { "oem_data", 1024, 1, 0444 },
 		/* oem specific configuration */
 		"0"
+	},
+	{ { "t_unlock_code", 512, 1, 0444 },
+		/* Temporary unlock signed code, base64 encoded */
+		""
+	},
+	{ { "t_unlock_cert", 1024, 1, 0444 },
+		/* Temporary unlock signed certificate, base64 encoded */
+		""
 	},
 	{ { "", 0, 0, 0 }, 0 },
 };
