@@ -224,8 +224,10 @@ BootRom_InitUart:
 .if (BOOTINFO_UART0_ENABLE == 1)
     ldr         r1, =(MS_BUS_RIU_ADDR + (0x000e00 << 1))
     ldr         r0, [r1, #(0x12 << 1)]
-    //bic         r0, r0, #0x0800                             //Disable UART Rx
+
     bic         r0, r0, #0x1000                             //switch UART to ARM
+    mov         r2, r0                                      //Backup rx en/dis setting in r2
+    bic         r0, r0, #0x0800                             //Keep Rx disable during UART0 init
     str         r0, [r1, #(0x12 << 1)]
 
     ldr         r1, =(MS_BUS_RIU_ADDR + (0x101e00 << 1))
@@ -263,6 +265,9 @@ BootRom_InitUart:
 
     ldr         r0, =0x0000
     str         r0, [r1, #(0x84 << 1)]                      //Disable Interrupt
+
+    ldr         r1, =(MS_BUS_RIU_ADDR + (0x000e00 << 1))
+    str         r2, [r1, #(0x12 << 1)]                      //Write back rx en/dis setting from r2
 .endif
 
 .if (BOOTINFO_UART1_ENABLE == 1)
