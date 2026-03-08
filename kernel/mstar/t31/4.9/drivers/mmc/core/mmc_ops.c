@@ -797,3 +797,264 @@ int mmc_can_ext_csd(struct mmc_card *card)
 {
 	return (card && card->csd.mmca_vsn > CSD_SPEC_VER_3);
 }
+
+/*
+ * CMD56 is for Koixia Nand
+ */
+int mmc_send_vendor_cmd56_write(struct mmc_host *host, struct mmc_card *card,
+			 struct vendor_command_data *cmd_data, u32 arg)
+{
+	struct mmc_request mrq = {0};
+	struct mmc_command cmd = {0};
+	struct mmc_data data = {0};
+	struct scatterlist sg;
+
+	mrq.cmd = &cmd;
+	mrq.data = &data;
+	cmd.opcode = 56;
+	cmd.arg = arg;
+	cmd.flags = MMC_RSP_R1;
+	data.blksz = 512;
+	data.blocks = 1;
+	data.flags = MMC_DATA_WRITE;
+	data.sg = &sg;
+	data.sg_len = 1;
+
+	mmc_set_data_timeout(&data, card);
+	sg_init_one(&sg, cmd_data, 512);
+	mmc_wait_for_req(host, &mrq);
+
+	if (cmd.error)
+		return cmd.error;
+
+	if (data.error)
+		return data.error;
+
+	return 0;
+}
+
+int mmc_send_vendor_cmd56_read(struct mmc_host *host, struct mmc_card *card, u32 arg, u8 *buf)
+{
+	struct mmc_request mrq = {0};
+	struct mmc_command cmd = {0};
+	struct mmc_data data = {0};
+	struct scatterlist sg;
+
+	mrq.cmd = &cmd;
+	mrq.data = &data;
+	cmd.opcode = 56;
+	cmd.arg = arg;
+	cmd.flags = MMC_RSP_R1;
+	data.blksz = 512;
+	data.blocks = 1;
+	data.flags = MMC_DATA_READ;
+	data.sg = &sg;
+	data.sg_len = 1;
+
+	mmc_set_data_timeout(&data, card);
+	sg_init_one(&sg, buf, 512);
+	mmc_wait_for_req(host, &mrq);
+
+	if (cmd.error)
+		return cmd.error;
+
+	if (data.error)
+		return data.error;
+
+	return 0;
+}
+
+/* for Kioxia Nand */
+int mmc_send_pe_count(struct mmc_card *card, u32 opcode, void *buf, unsigned len)
+{
+	struct mmc_request mrq = {NULL};
+	struct mmc_command cmd = {0};
+	struct mmc_host *host = card->host;
+	struct mmc_data data = {0};
+	struct scatterlist sg;
+
+	mrq.cmd = &cmd;
+	mrq.data = &data;
+
+	cmd.opcode = opcode;
+	cmd.arg = 0x42535493;
+
+	/* NOTE HACK:  the MMC_RSP_SPI_R1 is always correct here, but we
+	 * rely on callers to never use this with "native" calls for reading
+	 * CSD or CID.  Native versions of those commands use the R2 type,
+	 * not R1 plus a data block.
+	 */
+
+	cmd.flags =  MMC_RSP_R1 | MMC_CMD_ADTC;
+
+	data.blksz = len;
+	data.blocks = 1;
+	data.flags = MMC_DATA_READ;
+	data.sg = &sg;
+	data.sg_len = 1;
+
+	sg_init_one(&sg, buf, len);
+
+	if (opcode == MMC_SEND_CSD || opcode == MMC_SEND_CID) {
+		/*
+		 * The spec states that CSR and CID accesses have a timeout
+		 * of 64 clock cycles.
+		 */
+		data.timeout_ns = 0;
+		data.timeout_clks = 64;
+	} else
+		mmc_set_data_timeout(&data, card);
+
+	mmc_wait_for_req(host, &mrq);
+
+	if (cmd.error)
+		return cmd.error;
+	if (data.error)
+		return data.error;
+
+	return 0;
+}
+
+/*
+ * for WD
+ */
+int mmc_send_vendor_wd_cmd62(struct mmc_card *card)
+{
+	int ret = 0;
+	struct mmc_command cmd = {0};
+	struct mmc_host *host = card->host;
+
+	cmd.opcode = 62;
+	cmd.arg = 0x96c9d71c;
+	cmd.flags = MMC_RSP_R1B | MMC_CMD_AC;
+
+	ret = mmc_wait_for_cmd(host, &cmd, 0);
+
+	return ret;
+}
+
+/*
+ * for WD nand
+ */
+int mmc_send_vendor_wd_cmd63(struct mmc_card *card, unsigned char *buf, int len)
+{
+	struct mmc_request mrq = {0};
+	struct mmc_command cmd = {0};
+	struct mmc_data data = {0};
+	struct scatterlist sg;
+	struct mmc_host *host = card->host;
+
+	mrq.cmd = &cmd;
+	mrq.data = &data;
+
+	cmd.opcode = 63;
+	cmd.arg = 0;
+
+	cmd.flags =  MMC_RSP_R1B | MMC_CMD_ADTC;
+
+	data.blksz = len;
+	data.blocks = 1;
+	data.flags = MMC_DATA_READ;
+	data.sg = &sg;
+	data.sg_len = 1;
+
+	sg_init_one(&sg, buf, len);
+	
+	mmc_set_data_timeout(&data, card);
+
+	mmc_wait_for_req(host, &mrq);
+
+	if (cmd.error)
+		return cmd.error;
+	if (data.error)
+		return data.error;
+
+	return 0;
+}
+
+int mmc_send_vendor_samsung_password_write(struct mmc_card *card, unsigned char *buf)
+{
+	struct mmc_request mrq = {0};
+	struct mmc_command cmd = {0};
+	struct mmc_data data = {0};
+	struct scatterlist sg;
+	struct mmc_host *host = card->host;
+
+	mrq.cmd = &cmd;
+	mrq.data = &data;
+
+	cmd.opcode = 23;
+	cmd.arg = 1;
+	cmd.flags = MMC_RSP_R1 | MMC_CMD_AC;
+	mmc_wait_for_cmd(host, &cmd, 0);
+	if(cmd.error){
+		printk("[lxs] 1st cmd23 error=%d \n",cmd.error);
+		return cmd.error;
+	}
+
+	cmd.opcode = 25;
+	cmd.arg = 0xC7810000;
+	cmd.flags = MMC_RSP_R1 | MMC_CMD_ADTC;
+	data.blksz = 512;
+	data.blocks = 1;
+	data.flags = MMC_DATA_WRITE;
+	data.sg = &sg;
+	data.sg_len = 1;
+
+	mmc_set_data_timeout(&data, card);
+	sg_init_one(&sg, buf, 512);
+	mmc_wait_for_req(host, &mrq);
+
+	if (cmd.error)
+		return cmd.error;
+
+	if (data.error)
+		return data.error;
+
+	return 0;
+}
+
+/* 
+ * for Samsung
+ */
+int mmc_send_vendor_samsung_ssr_read(struct mmc_card *card, unsigned char *buf)
+{
+	struct mmc_request mrq = {0};
+	struct mmc_command cmd = {0};
+	struct mmc_data data = {0};
+	struct scatterlist sg;
+	struct mmc_host *host = card->host;
+
+	mrq.cmd = &cmd;
+	mrq.data = &data;
+
+	cmd.opcode = 23;
+	cmd.arg = 1;
+	cmd.flags = MMC_RSP_R1 | MMC_CMD_AC;
+	mmc_wait_for_cmd(host, &cmd, 0);
+	if(cmd.error){
+		printk("[lxs] 2nd cmd23 error=%d \n",cmd.error);
+		return cmd.error;
+	}
+
+	cmd.opcode = 18;
+	cmd.arg = 0xC7810000;
+	cmd.flags = MMC_RSP_R1;
+	data.blksz = 512;
+	data.blocks = 1;
+	data.flags = MMC_DATA_READ;
+	data.sg = &sg;
+	data.sg_len = 1;
+
+	mmc_set_data_timeout(&data, card);
+	sg_init_one(&sg, buf, 512);
+	mmc_wait_for_req(host, &mrq);
+	
+	if (cmd.error)
+		return cmd.error;
+
+	if (data.error)
+		return data.error;
+
+	return 0;
+}

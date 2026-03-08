@@ -678,7 +678,7 @@ void Titania3_series_start_ehc(struct usb_hcd *hcd, uintptr_t UTMI_base,
 
 #if defined(ENABLE_DISCONNECT_HC_KEEP_RUNNING_ECO)
 	/* EHCI keeps running when device is disconnected */
-	writeb(readb((void*)(USBC_base+0x19*2-1)) | BIT3, (void*)(USBC_base+0x19*2-1));
+	//writeb(readb((void*)(USBC_base+0x19*2-1)) | BIT3, (void*)(USBC_base+0x19*2-1));
 #endif
 
 #if !defined(_EHC_SINGLE_SOF_TO_CHK_DISCONN)
