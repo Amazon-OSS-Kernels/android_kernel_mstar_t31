@@ -97,18 +97,18 @@ static int mma_meminfo_show(struct seq_file *s, void *unused)
 
     mutex_lock(&mma_dev->buf_lock);
     if(mma_dev->record_alloc_time) {
-        seq_printf(s, "%16.s %16.s %16.s %16.s %16.s %16.s %16.s %16.s %16.s %16.s\n", "serial", "buf_tag", "addr", "size", "pid", "tgid", "mpid", "secure", "iova", "alloc_time(us)");
+        seq_printf(s, "%16.s %16.s %16.s %16.s %16.s %16.s %16.s %16.s\n", "serial", "buf_tag", "addr", "size", "pid", "secure", "iova", "alloc_time(us)");
 
         list_for_each_entry(handle, &mma_dev->buf_list_head, buf_list_node) {
-            seq_printf(s, "%16d %16.s %16llx %16x %16d %16d %16d %16d %16d %16d\n", handle->serial, handle->buf_tag, handle->addr,
-                       (u32)handle->length, handle->pid, handle->tgid, handle->map_pid, handle->auth_count>0?1:0, handle->is_iova?1:0, handle->alloc_time_ms);
+            seq_printf(s, "%16d %16.s %16llx %16x %16d %16d %16d %16d\n", handle->serial, handle->buf_tag, handle->addr,
+                       (u32)handle->length, handle->tpid, handle->auth_count>0?1:0, handle->is_iova?1:0, handle->alloc_time_ms);
         }
     } else {
-        seq_printf(s, "%16.s %16.s %16.s %16.s %16.s %16.s %16.s %16.s %16.s\n", "serial", "buf_tag", "addr", "size", "pid", "tigd", "mpid", "secure", "iova");
+        seq_printf(s, "%16.s %16.s %16.s %16.s %16.s %16.s %16.s\n", "serial", "buf_tag", "addr", "size", "pid", "secure", "iova");
 
         list_for_each_entry(handle, &mma_dev->buf_list_head, buf_list_node) {
-            seq_printf(s,  "%16d %16.s %16llx %16x %16d %16d %16d %16d %16d\n", handle->serial, handle->buf_tag, handle->addr,
-                       (u32)handle->length, handle->pid, handle->tgid, handle->map_pid, handle->auth_count>0?1:0, handle->is_iova?1:0);
+            seq_printf(s,  "%16d %16.s %16llx %16x %16d %16d %16d\n", handle->serial, handle->buf_tag, handle->addr,
+                       (u32)handle->length, handle->tpid, handle->auth_count>0?1:0, handle->is_iova?1:0);
         }
     }
 

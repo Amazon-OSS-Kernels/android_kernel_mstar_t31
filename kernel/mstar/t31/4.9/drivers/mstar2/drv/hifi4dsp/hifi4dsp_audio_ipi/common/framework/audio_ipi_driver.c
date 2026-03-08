@@ -496,15 +496,7 @@ static void __exit audio_ipi_driver_exit(void)
 	misc_deregister(&audio_ipi_device);
 }
 
-#if defined(IPC_DISABLE_IPI)
-/*
- * If defined IPC_DISABLE_IPI,then no need this module .
- * IPC_DISABLE_IPI will defined on hailey product,
- * Hailey product does not use the ipi function.
- */
 
-#else
 module_init(audio_ipi_driver_init);
 module_exit(audio_ipi_driver_exit);
-#endif
 

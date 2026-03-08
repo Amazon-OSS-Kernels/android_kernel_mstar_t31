@@ -17,10 +17,6 @@
 #include <linux/slab.h>
 #include <linux/tee_drv.h>
 #include "tee_private.h"
-#include <linux/delay.h>
-
-#define NAP_MS		20
-#define MAX_RETRY	50
 
 static int pool_op_gen_alloc(struct tee_shm_pool_mgr *poolm,
 			     struct tee_shm *shm, size_t size)
@@ -28,19 +24,10 @@ static int pool_op_gen_alloc(struct tee_shm_pool_mgr *poolm,
 	unsigned long va;
 	struct gen_pool *genpool = poolm->private_data;
 	size_t s = roundup(size, 1 << genpool->min_alloc_order);
-	unsigned int retry_cnt = 0;
 
-Retry:
 	va = gen_pool_alloc(genpool, s);
-	if (!va) {
-
-		msleep(NAP_MS);
-		retry_cnt++;
-		if (retry_cnt < MAX_RETRY)
-			goto Retry;
-		else
-			return -ENOMEM;
-	}
+	if (!va)
+		return -ENOMEM;
 
 	memset((void *)va, 0, s);
 	shm->kaddr = (void *)va;

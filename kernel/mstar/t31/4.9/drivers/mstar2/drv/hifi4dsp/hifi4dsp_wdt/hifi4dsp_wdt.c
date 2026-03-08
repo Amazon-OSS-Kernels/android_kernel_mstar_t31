@@ -19,26 +19,24 @@
 #include <linux/slab.h>
 #include <linux/workqueue.h>
 #include <hifi4dsp_load/hifi4dsp_load.h>
-#include <hifi4dsp_wdt/hifi4dsp_wdt.h>
 
 #ifdef CONFIG_AMAZON_DSP_FRAMEWORK
 #include "adf/adf_status.h"
 #include "adf/adf_common.h"
 #endif
 
-#ifdef ENABLE_IPC_AGENT
-#include <hifi4dsp_agent/mt8570/acs_ipc_agent_driver.h>
-#endif
-
 #define DRV_NAME        "mtk-dsp_wdt"
 
+#if defined(CONFIG_IDME)
+extern char *idme_get_config_name(void);
+#define DTS_STRING_LENGTH 64
+#endif
+
 struct mtk_dsp_wdt_dev {
-    struct device *dev;
     void __iomem *dsp_wdt_base;;
     unsigned int dsp_wdt_irq_id;
     u32 dsp_wdt_gpio;
-    u32 dsp_wdt_inverse;
-    u32 dsp_wdt_is_enabled;
+	u32 dsp_wdt_inverse;
 };
 
 static struct workqueue_struct *dsp_wdt_queue;
@@ -151,11 +149,17 @@ static struct notifier_block adsp_rst_notifier = {
 
 static irqreturn_t mtk_dsp_wdt_isr(int irq, void *dev_id)
 {
-#ifdef ENABLE_IPC_AGENT
-    ipc_agent_set_wdt_triggered();
-#endif
-
-    queue_work(dsp_wdt_queue, &dsp_wdt_work);
+    u16 sts;
+    //check interrupt source
+    sts = REG_ADDR((0x000F<<9) + (0x01<<2)) & BIT(8);
+    if(sts)
+    {
+        pr_info("%s() %d.\n", __func__,__LINE__);
+        queue_work(dsp_wdt_queue, &dsp_wdt_work);
+        //clear INTERRUPT for PAD_PM_GPIO_1
+        REG_ADDR((0x000F<<9) + (0x01<<2)) |= BIT(6);
+        return IRQ_HANDLED;
+    }
     return IRQ_NONE;
 }
 
@@ -167,12 +171,6 @@ void hifi4dsp_wdt_handler(void)
 void dsp_wdt_work_handler(struct work_struct *unused)
 {
     char data[32], *envp[] = { data, NULL };
-    mtk_dsp_wdt_disable();
-
-#ifdef ENABLE_IPC_AGENT
-    ipc_agent_wdt_handle();
-#endif
-
     pr_notice("[%s] ADSP happens exception!\n", __func__);
 
     snprintf(data, sizeof(data), "ACTION=DSP_WTD_WHOLE");
@@ -199,14 +197,9 @@ static int mtk_dsp_wdt_probe(struct platform_device *pdev)
 		return -EINVAL;
     }
 
-#if defined(CONFIG_IDME)
-	char property_name[DTS_STRING_LENGTH];
-	char buffer_default[DTS_STRING_LENGTH];
-	char *hw_build_id;
-#endif
     int err;
-	u32 prop;
     struct mtk_dsp_wdt_dev *mtk_dsp_wdt;
+	char project_name[DTS_STRING_LENGTH];
 
     pr_info("%s() enter.\n", __func__);
 
@@ -215,140 +208,61 @@ static int mtk_dsp_wdt_probe(struct platform_device *pdev)
     if (!mtk_dsp_wdt)
         return -ENOMEM;
 
-#if defined(CONFIG_IDME)
-	memset (property_name, 0, sizeof(property_name));
-	memset (buffer_default, 0, sizeof(buffer_default));
-
-	snprintf((char *)property_name, DTS_STRING_LENGTH, "%s", idme_get_config_name());
-	hw_build_id = memchr(property_name, '_', sizeof(property_name));
-	if (hw_build_id) {
-		/*Remove hw_specific string*/
-		*hw_build_id = '\0';
-	}
-
-	snprintf((char *)buffer_default, DTS_STRING_LENGTH, "%s%s", "dsp-wdt-gpio_", property_name);
-	if (!of_property_read_u32(pdev->dev.of_node, buffer_default, &prop)) {
-		mtk_dsp_wdt->dsp_wdt_gpio = prop;
-		pr_info("%s:  %s is %d \n", __func__, buffer_default, prop);
-	} else
-#endif
-	if (!of_property_read_u32(pdev->dev.of_node, "dsp-wdt-gpio", &prop)) {
-		mtk_dsp_wdt->dsp_wdt_gpio = prop;
-		pr_info("%s: dsp-wdt-gpio is %d \n", __func__, prop);
+	snprintf((char *)project_name, DTS_STRING_LENGTH, "%s", idme_get_config_name());
+	if (strstr(project_name, "abc123")) {
+		mtk_dsp_wdt->dsp_wdt_inverse = 1;
 	} else {
-		pr_err("%s: dsp-wdt-gpio is not defined \n", __func__);
-		mtk_dsp_wdt->dsp_wdt_gpio = 7;
-	}
-
-#if defined(CONFIG_IDME)
-	snprintf((char *)buffer_default, DTS_STRING_LENGTH, "%s%s", "dsp-wdt-inverse_", property_name);
-	if (!of_property_read_u32(pdev->dev.of_node, buffer_default, &prop)) {
-		mtk_dsp_wdt->dsp_wdt_inverse = prop;
-		pr_info("%s: %s is %d \n", __func__, buffer_default, prop);
-	} else
-#endif
-	if (!of_property_read_u32(pdev->dev.of_node, "dsp-wdt-inverse", &prop)) {
-		mtk_dsp_wdt->dsp_wdt_inverse = prop;
-		pr_info("%s: %s is %d \n", __func__, property_name, prop);
-	} else {
-		pr_err("%s: dsp-wdt-inverse is not defined \n", __func__);
 		mtk_dsp_wdt->dsp_wdt_inverse = 0;
 	}
 
-	dsp_wdt_queue = create_singlethread_workqueue("dsp_wdt_kworker");
-	INIT_WORK(&dsp_wdt_work, dsp_wdt_work_handler);
-
-	err = request_gpio_irq(mtk_dsp_wdt->dsp_wdt_gpio, mtk_dsp_wdt_isr, (mtk_dsp_wdt->dsp_wdt_inverse ? IRQF_TRIGGER_RISING : IRQF_TRIGGER_FALLING), &pdev->dev);
-	if (err != 0) {
-		pr_notice("hifi4dsp: %s: failed to request irq %d(err:%d)\n", __func__, mtk_dsp_wdt->dsp_wdt_gpio, err);
-		devm_kfree(&pdev->dev, mtk_dsp_wdt);
-		return err;
-	}
-    else {
-        mtk_dsp_wdt->dsp_wdt_is_enabled = 1;
+    //Bootmode as WDT. /*fix should modify in dst for ANND, idx = 7 */
+    if (!of_property_read_u32(pdev->dev.of_node, "dsp-wdt-gpio", &mtk_dsp_wdt->dsp_wdt_gpio)) {
+    	pr_info("hifi4dsp: dsp-wdt-gpio is %d \n", mtk_dsp_wdt->dsp_wdt_gpio);
+    } else {
+    	pr_err("hifi4dsp: dsp-wdt-gpio is not defined \n");
+    	mtk_dsp_wdt->dsp_wdt_gpio = 7;
     }
+    if (!of_property_read_u32(pdev->dev.of_node, "interrupts",&mtk_dsp_wdt->dsp_wdt_irq_id)) {
+    	pr_info("hifi4dsp: interrupts is %d \n", mtk_dsp_wdt->dsp_wdt_irq_id);
+    } else {
+    	pr_err("hifi4dsp: interrupts is not defined \n");
+    	mtk_dsp_wdt->dsp_wdt_irq_id = 33;
+    }
+
+    dsp_wdt_queue = create_singlethread_workqueue("dsp_wdt_kworker");
+    INIT_WORK(&dsp_wdt_work, dsp_wdt_work_handler);
+
+    err = request_irq(mtk_dsp_wdt->dsp_wdt_irq_id, mtk_dsp_wdt_isr,
+        IRQF_TRIGGER_RISING|IRQF_SHARED, DRV_NAME, mtk_dsp_wdt);
+    if (err != 0) {
+        pr_notice("hifi4dsp: %s: failed to request irq %d(err:%d)\n", __func__, mtk_dsp_wdt->dsp_wdt_irq_id, err);
+        return err;
+    }
+    //set as gpio input mode PAD_PM_GPIO_1 //gpio index 7
+    REG_ADDR((0x000F<<9) + (0x01<<2)) &= ~(BIT(1));
+    REG_ADDR((0x000F<<9) + (0x01<<2)) &= ~(BIT(2));
+    REG_ADDR((0x000F<<9) + (0x01<<2)) |= (BIT(0));
+    REG_ADDR((0x000F<<9) + (0x01<<2)) |= BIT(6);
+    // set falling trigger
+	if (mtk_dsp_wdt->dsp_wdt_inverse) {
+		REG_ADDR((0x000F<<9) + (0x01<<2)) &= ~(BIT(7));
+		printk("hifi4dsp: dsp_wdt_inverse = %d, need inverse abc123/abc123eu\n", mtk_dsp_wdt->dsp_wdt_inverse);
+	} else {
+		REG_ADDR((0x000F<<9) + (0x01<<2)) |= BIT(7);
+		printk("hifi4dsp: dsp_wdt_inverse = %d\n", mtk_dsp_wdt->dsp_wdt_inverse);
+	}
+    //Enable interrupt mask
+    REG_ADDR((0x000F<<9) + (0x01<<2)) &= ~(BIT(4));
 
     register_adsp_wdt_notifier(&dbg_show_log_notifier);
 #ifdef CONFIG_MTK_HIFI4DSP_WDT_RECOVER_SUPPORT
     register_adsp_wdt_notifier(&adsp_rst_notifier);
 #endif
 
-	platform_set_drvdata(pdev, mtk_dsp_wdt);
    gpdev = pdev;
 
     return 0;
 }
-
-void mtk_dsp_wdt_disable(void)
-{
-    int ret;
-    pr_info("Disable DSP WDT interruption \n");
-    struct mtk_dsp_wdt_dev *dev = dev_get_drvdata(&gpdev->dev);
-    if (dev->dsp_wdt_is_enabled) {
-        ret = free_gpio_irq(dev->dsp_wdt_gpio, &gpdev->dev);
-        if (ret != 0) {
-            pr_err(" %s: failed to free irq %d(err:%d)\n", __func__, dev->dsp_wdt_gpio, ret);
-        }
-        else {
-            dev->dsp_wdt_is_enabled = 0;
-        }
-    }
-    else
-        pr_info("Already DSP WDT is disabled.\n");
-}
-void mtk_dsp_wdt_enable(void)
-{
-    int ret;
-    pr_info("Enable DSP WDT interruption \n");
-    struct mtk_dsp_wdt_dev *dev = dev_get_drvdata(&gpdev->dev);
-    if (!dev->dsp_wdt_is_enabled) {
-        ret = request_gpio_irq(dev->dsp_wdt_gpio, mtk_dsp_wdt_isr, (dev->dsp_wdt_inverse ? IRQF_TRIGGER_RISING : IRQF_TRIGGER_FALLING), &gpdev->dev);
-        if (ret != 0) {
-            pr_err(" %s: failed to request irq %d(err:%d)\n", __func__, dev->dsp_wdt_gpio, ret);
-        }
-        else {
-            dev->dsp_wdt_is_enabled = 1;
-        }
-    }
-    else
-        pr_info("Already DSP WDT is enabled.\n");
-}
-
-static int mtk_dsp_wdt_pm_suspend(struct device *device)
-{
-    int ret;
-	struct mtk_dsp_wdt_dev *dev = dev_get_drvdata(device);
-	pr_info("%s is suspend, disabled irq\n", __func__);
-	ret = free_gpio_irq(dev->dsp_wdt_gpio, device);
-    if (ret != 0) {
-        pr_err(" %s: failed to free irq %d(err:%d)\n", __func__, dev->dsp_wdt_gpio, ret);
-    }
-    else {
-        dev->dsp_wdt_is_enabled = 0;
-    }
-
-	return 0;
-}
-
-static int mtk_dsp_wdt_pm_resume(struct device *device)
-{
-	struct mtk_dsp_wdt_dev *dev = dev_get_drvdata(device);
-	int ret;
-	pr_info("%s is resume, enabled irq\n", __func__);
-	ret = request_gpio_irq(dev->dsp_wdt_gpio, mtk_dsp_wdt_isr, (dev->dsp_wdt_inverse ? IRQF_TRIGGER_RISING : IRQF_TRIGGER_FALLING), device);
-	if (ret != 0) {
-		pr_err(" %s: failed to request irq %d(err:%d)\n", __func__, dev->dsp_wdt_gpio, ret);
-	}
-    else {
-        dev->dsp_wdt_is_enabled = 1;
-    }
-	return 0;
-}
-
-struct dev_pm_ops const mtk_dsp_wdt_pm_ops = {
-	.suspend = mtk_dsp_wdt_pm_suspend,
-	.resume = mtk_dsp_wdt_pm_resume,
-};
 
 static const struct of_device_id mtk_dsp_wdt_dt_ids[] = {
     { .compatible = "mediatek,hifi4dsp-wdt" },
@@ -361,10 +275,7 @@ static struct platform_driver mtk_dsp_wdt_driver = {
     .probe        = mtk_dsp_wdt_probe,
     .driver        = {
         .name        = DRV_NAME,
-#ifdef CONFIG_OF
         .of_match_table    = mtk_dsp_wdt_dt_ids,
-#endif
-		.pm = &mtk_dsp_wdt_pm_ops,
     },
 };
 

@@ -31,14 +31,6 @@ int mmc_switch_status_error(struct mmc_host *host, u32 status);
 int __mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 		unsigned int timeout_ms, bool use_busy_signal, bool send_status,
 		bool ignore_crc);
-int mmc_send_pe_count(struct mmc_card *card, u32 opcode, void *buf, unsigned len);
-int mmc_send_vendor_cmd56_write(struct mmc_host *host, struct mmc_card *card,
-		struct vendor_command_data *cmd_data, u32 arg);
-int mmc_send_vendor_cmd56_read(struct mmc_host *host, struct mmc_card *card,
-		u32 arg, u8 *buf);
-int mmc_send_vendor_wd_cmd62(struct mmc_card *card);
-int mmc_send_vendor_wd_cmd63(struct mmc_card *card, unsigned char *buf, int len);
-int mmc_send_vendor_samsung_password_write(struct mmc_card *card, unsigned char *buf);
-int mmc_send_vendor_samsung_ssr_read(struct mmc_card *card, unsigned char *buf);
+
 #endif
 

@@ -3213,15 +3213,11 @@ static int hub_port_wait_reset(struct usb_hub *hub, int port1,
 	#endif
 #endif
 	#if defined(ENABLE_EOF1_WINDOW_FOR_ISO_INTR_ECO)
-			writeb(readb((void*)(hcd->usbc_base+0x21*2-1)) | (BIT5 | BIT4), (void*)(hcd->usbc_base+0x21*2-1));
 			hcd_writeb(hcd, (hcd_readb(hcd, 0x34) & (u8)(~BIT3)) | BIT2, 0x34);
 			//printk("[EHCI EOF1-16]\n");
 	#endif
 		} else if(udev->speed == USB_SPEED_FULL){
 			hub->hdev->speed=USB_SPEED_FULL;
-	#if defined(ENABLE_EOF1_WINDOW_FOR_ISO_INTR_ECO)
-			writeb(readb((void*)(hcd->usbc_base+0x21*2-1)) & ~(BIT5 | BIT4), (void*)(hcd->usbc_base+0x21*2-1));
-	#endif
 			//tony add for Babble issue (FS)
 			//"1.Babble issue (EOF1):   (1) if device is HS      => bit <3:2> set 11   (2) ifdevice is FS      => bit <3:2> set 10"
 			hcd_writeb(hcd, hcd_readb(hcd, 0x34) | BIT3, 0x34);
@@ -3229,9 +3225,6 @@ static int hub_port_wait_reset(struct usb_hub *hub, int port1,
 			//printk("FS 4868:%x\n", hcd_readb(hcd, 0x34));
 		} else if(udev->speed == USB_SPEED_LOW){
 			hub->hdev->speed=USB_SPEED_LOW;
-	#if defined(ENABLE_EOF1_WINDOW_FOR_ISO_INTR_ECO)
-			writeb(readb((void*)(hcd->usbc_base+0x21*2-1)) & ~(BIT5 | BIT4), (void*)(hcd->usbc_base+0x21*2-1));
-	#endif
 		}else{
 			printk("unknow port1 usb device speed\n");
 			return -ENOTCONN;
