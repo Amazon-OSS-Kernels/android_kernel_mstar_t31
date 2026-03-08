@@ -27,6 +27,13 @@
 #include <linux/gpio.h>
 #include "mdrv_mstypes.h"
 #include "hifi4dsp_load/hifi4dsp_load.h"
+#include "audio_messenger_ipi.h"
+
+/*
+ * 16: audio ipi header size in bytes
+ * 72: payload size in bytes
+ */
+#define IPI_MSG_DEFAULT_COPY_SIZE (IPI_MSG_HEADER_SIZE + 16 + 72)
 
 #ifdef CONFIG_MTK_HIFI4DSP_WDT_RECOVER_SUPPORT
 #include "hifi4dsp_wdt/hifi4dsp_wdt.h"
@@ -123,6 +130,8 @@ void mt8570_ipi_handler(enum adsp_core_id core_id)
 	unsigned int flag = 0;
 #endif
 	enum adsp_ipi_id adsp_ipi_id;
+	int copy_size;
+	int remain_size;
 
 	pr_debug("[ADSP] A ipi handler, id=%d\n", core_id);
 
@@ -132,9 +141,26 @@ void mt8570_ipi_handler(enum adsp_core_id core_id)
 		msleep(20);
 	}
 
-	memcpy_from_adsp(core_id, adsp_rcv_obj[core_id],
-		adsp_info[core_id].adsp_rcv_obj_addr,
-		sizeof(struct adsp_share_obj));
+	/* copy default size
+	 * it's the most frequency ipi message from adsp during recording.
+	 */
+	copy_size = IPI_MSG_DEFAULT_COPY_SIZE;
+	memcpy_from_adsp_no_clr(core_id, adsp_rcv_obj[core_id],
+				adsp_info[core_id].adsp_rcv_obj_addr,
+				copy_size);
+
+	/* copy remaining size */
+	remain_size = adsp_rcv_obj[core_id]->len + IPI_MSG_HEADER_SIZE - copy_size;
+	if (adsp_rcv_obj[core_id]->len > 0 && remain_size > 0)
+		memcpy_from_adsp_no_clr(core_id,
+					&adsp_rcv_obj[core_id]->share_buf[copy_size - IPI_MSG_HEADER_SIZE],
+					(adsp_info[core_id].adsp_rcv_obj_addr + copy_size),
+					remain_size);
+	else
+		pr_debug("[ADSP] A ipi handler, adsp_rcv_obj[core_id]->len: %d, remain_size: %d\n",
+			 adsp_rcv_obj[core_id]->len, remain_size);
+
+	clr_adsp_to_host_status(core_id, IPC_MESSAGE_READY);
 
 	adsp_ipi_id = adsp_rcv_obj[core_id]->id;
 	/*pr_debug("adsp A ipi handler %d\n", adsp_ipi_id);*/

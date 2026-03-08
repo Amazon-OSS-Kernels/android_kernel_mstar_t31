@@ -88,6 +88,7 @@ static int lowmem_minfree_size = 4;
 #endif
 
 static unsigned long lowmem_deathpending_timeout;
+static pid_t lowmem_deathpending_tgid;
 
 #ifdef CONFIG_AMZ_MISC
 /* ACOS_MOD_BEGIN {fwk_crash_log_collection} */
@@ -192,7 +193,6 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 				global_node_page_state(NR_SHMEM) -
 				global_node_page_state(NR_UNEVICTABLE) -
 				total_swapcache_pages();
-
 #ifdef CONFIG_MP_Android_MSTAR_ADJUST_LOW_MEM_KILLER_POLICY
 	int active_file = global_node_page_state(NR_ACTIVE_FILE);
 	int inactive_file = global_node_page_state(NR_INACTIVE_FILE);
@@ -292,7 +292,7 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 		if (!p)
 			continue;
 
-		if (task_lmk_waiting(p) &&
+		if ((task_lmk_waiting(p) || (lowmem_deathpending_tgid == task_tgid_nr(p))) &&
 		    time_before_eq(jiffies, lowmem_deathpending_timeout)) {
 			task_unlock(p);
 			rcu_read_unlock();
@@ -372,6 +372,7 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 		long free = other_free * (long)(PAGE_SIZE / 1024);
 
 		task_lock(selected);
+		lowmem_deathpending_tgid = task_tgid_nr(selected);
 		send_sig(SIGKILL, selected, 0);
 		if (selected->mm)
 			task_set_lmk_waiting(selected);

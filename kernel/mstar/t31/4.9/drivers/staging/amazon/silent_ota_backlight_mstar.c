@@ -308,7 +308,7 @@ static void set_backlight(unsigned char on)
             if (backlight_inverse) {
                 MDrv_GPIO_Set_Low(backlight_gpio);
             } else {
-                if (strstr(idme_get_config_name(), "abc123") != NULL) {
+                if (strstr(idme_get_config_name(), "ABC") != NULL) {
 #ifdef CONFIG_MSTAR_PWM
                     pr_info("PWM Duty status = %d\n", MDrv_PWM_Shift(E_PWM_CH0, 0xc0000));
 #endif
@@ -337,7 +337,7 @@ static void set_backlight(unsigned char on)
             if (backlight_inverse) {
                 MDrv_GPIO_Set_High(backlight_gpio);
             } else {
-                if (strstr(idme_get_config_name(), "abc123") != NULL) {
+                if (strstr(idme_get_config_name(), "ABC") != NULL) {
 #ifdef CONFIG_MSTAR_PWM
                     pr_info("PWM Duty status = %d\n", MDrv_PWM_Shift(E_PWM_CH0, 0x80000));
 #endif
@@ -393,6 +393,8 @@ unsigned int toggle_backlight(unsigned int keycode)
 				(keycode == KEY_APP2) ||
 				(keycode == KEY_APP3) ||
 				(keycode == KEY_APP4) ||
+				(keycode == KEY_BUTTON1) ||
+				(keycode == KEY_BUTTON2) ||
 				(keycode == KEY_WAKEUP)) {
 			if (!backlight_status)
 				set_backlight(1);

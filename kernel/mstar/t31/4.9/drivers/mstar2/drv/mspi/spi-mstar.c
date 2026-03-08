@@ -84,6 +84,17 @@
 #include <linux/of_device.h>
 #include <linux/spi/spi.h>
 #include <linux/version.h>
+#include <linux/spinlock.h>
+
+#ifdef CONFIG_AMAZON_METRICS_LOG
+#include <linux/metricslog.h>
+#endif
+
+#define DEBUG_SPI_TIMEOUT 0
+#if DEBUG_SPI_TIMEOUT
+#include <linux/debugfs.h>
+#include <linux/uaccess.h>
+#endif
 
 #define MSPI_PRINT(fmt, args...)        //printk("[MSPI][%05d] " fmt, __LINE__, ## args)
 /*
@@ -92,6 +103,12 @@
  *      0:require pins mapping at sboot/mboot stage.
  */
 #define CONFIG_DEBUG_MSPI 0
+
+/*
+ Threshold value for SPI pkt length check.
+ This is to detect invalid SPI pkt length by memory corrption or unknown reason.
+*/
+#define MSPI_PKT_LEN_CHK    (100 * 1024)
 
 /* SPI register offsets */
 #define MSPI_WD0_1                      0x40
@@ -111,7 +128,10 @@
 #define MSPI_WD28_29                      0x0A
 #define MSPI_WD30_31                      0x0B
 
-int MSPI_DUAL_MODE = 0;
+#define MSPI_SINGLE_MODE_HALF_DUPLEX      0
+#define MSPI_SINGLE_MODE 1
+#define MSPI_DUAL_MODE 2
+int MSPI_SPI_MODE = MSPI_SINGLE_MODE_HALF_DUPLEX;
 /*
 #define MSPI_FRD0_1          0x78
 #define MSPI_FRD2_3          0x79
@@ -161,12 +181,16 @@ static const u16 mspi_txfifoaddr[] = {
     MSPI_WD30_31,
 };
 static const u16 *mspi_rxfifoaddr;
-static const u16 mspi_rxfifoaddr_fulldeplex[] = {
+static const u16 mspi_rxfifoaddr_fullduplex[] = {
     0x78, 0x79, 0x7A, 0x7B, 0x7C, 0x7D, 0x7E, 0x7F};
-static const u16 mspi_rxfifoaddr_halfdeplex[] = {
+static const u16 mspi_rxfifoaddr_halfduplex[] = {
     0x44, 0x45, 0x46, 0x47, 0x10, 0x11, 0x12, 0x13,
     0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B};
 static int MSPI_WBF_RBF_SIZE_MAX = 0x10;  // default to single mode
+#define MAX_HALF_TX_BUF_SIZE           0x20
+#define MAX_FULL_TX_BUF_SIZE           0x10
+#define MSPI_HALF_DUPLEX    1
+#define MSPI_FULL_DUPLEX    0
 
 /*
 #define WB16_INDEX                     0x4
@@ -245,18 +269,21 @@ extern char *idme_get_config_name(void);
 #endif
 
 struct mstar_spi {
-	u64 regs;
+    u64 regs;
     u64 clkgen;
     u32 mspi_channel;
-	struct clk *clk;
-	int irq;
-	struct completion done;
-	const u8 *tx_buf;
-	u8 *rx_buf;
-	int len;
+    struct clk *clk;
+    int irq;
+    struct completion done;
+    const u8 *tx_buf;
+    u8 *rx_buf;
+    int len;
     int current_trans_len;
-        int num_chipselect;
-        int bus_num;
+    int num_chipselect;
+    int bus_num;
+    u8 fg_half_duplex;
+    u8 print_irq;
+    spinlock_t lock;
 };
 
 struct mstar_spi_data {
@@ -613,6 +640,8 @@ static void mstar_hw_txdummy(struct mstar_spi *bs,u8 len)
     {
         mstar_wrl(bs,mspi_txfifoaddr[cnt],0xff);
     }
+	mstar_wrh(bs, MSPI_WBF_RBF_SIZE, 0);
+	mstar_wrl(bs, MSPI_WBF_RBF_SIZE, len);
 }
 static void mstar_hw_txfillfifo(struct mstar_spi *bs,const u8*buffer,u8 len)
 {
@@ -625,47 +654,62 @@ static void mstar_hw_txfillfifo(struct mstar_spi *bs,const u8*buffer,u8 len)
     {
         mstar_wrl(bs,mspi_txfifoaddr[cnt],buffer[cnt<<1]);
     }
+	mstar_wrh(bs, MSPI_WBF_RBF_SIZE, 0);
+	mstar_wrl(bs, MSPI_WBF_RBF_SIZE, len);
 }
-static void mstar_hw_rxgetfifo(struct mstar_spi *bs,u8*buffer,u8 len)
+static void mstar_hw_rxgetfullfifo(struct mstar_spi *bs, u8 *buffer, u8 len)//full
+{
+    int cnt;
+	for (cnt = 0; cnt < (len>>1); cnt++) {
+		u16 val = mstar_rd(bs, mspi_rxfifoaddr_fullduplex[cnt]);
+		buffer[cnt<<1] = val & 0xff;
+		buffer[(cnt<<1)+1] = val>>8;
+}
+	if (len & 1) {
+		buffer[cnt<<1] = mstar_rdl(bs, mspi_rxfifoaddr_fullduplex[cnt]);
+    }
+}
+static void mstar_hw_rxgetfifo(struct mstar_spi *bs, u8 *buffer, u8 len)//half
 {
     int cnt;
     for (cnt = 0; cnt < (len>>1);cnt++)
     {
-        u16 val = mstar_rd(bs,mspi_rxfifoaddr[cnt]);
+		u16 val = mstar_rd(bs, mspi_rxfifoaddr_halfduplex[cnt]);
         buffer[cnt<<1] = val &0xff;
         buffer[(cnt<<1)+1] = val>>8;
     }
     if (len&1)
     {
-        buffer[cnt<<1] = mstar_rdl(bs,mspi_rxfifoaddr[cnt]);
+		buffer[cnt<<1] = mstar_rdl(bs, mspi_rxfifoaddr_halfduplex[cnt]);
     }
 }
-
-static void mstar_spi_hw_receive(struct mstar_spi *bs)
+static void mstar_spi_hw_receive(struct mstar_spi *bs)//full
 {
     MSPI_PRINT("%s\n",__func__);
     if (bs->rx_buf != NULL)
     {
-        mstar_hw_rxgetfifo(bs, bs->rx_buf, bs->current_trans_len);
+		mstar_hw_rxgetfullfifo(bs, bs->rx_buf, bs->current_trans_len);
         bs->rx_buf += bs->current_trans_len;
     }
 }
-static void mstar_spi_hw_transfer(struct mstar_spi *bs)
+static void mstar_spi_hw_transfer(struct mstar_spi *bs)//full
 {
-    int len = bs->len;
+    int len;
+
+    len = bs->len;
     MSPI_PRINT("%s start len=%d \n",__func__,len);
-    if (len >= MSPI_WBF_RBF_SIZE_MAX){
-        len = MSPI_WBF_RBF_SIZE_MAX;
+    if (len >= MAX_FULL_TX_BUF_SIZE) {
+		len = MAX_FULL_TX_BUF_SIZE;
     }
-    if (bs->tx_buf != NULL){
+	if (bs->tx_buf != NULL) {
         mstar_hw_txfillfifo(bs, bs->tx_buf, len);
         bs->tx_buf += len;
     }else{
         mstar_hw_txdummy(bs,len);
     }
-    mstar_wrl(bs,MSPI_WBF_RBF_SIZE,len);
     bs->current_trans_len = len;
     bs->len -= len;
+
     mstar_hw_transfer_trigger(bs);
     MSPI_PRINT("%s:%d end\n",__func__,__LINE__);
 }
@@ -723,11 +767,11 @@ static void mstar_spi_hw_rx_ext(struct mstar_spi *bs)
         #else
         mstar_hw_rxgetfifo(bs, bs->rx_buf, j);
         #endif
-        bs->rx_buf += j;
+		bs->rx_buf += j;
     }
 }
 
-static void mstar_spi_hw_xfer_ext(struct mstar_spi *bs)
+static void mstar_spi_hw_xfer_ext(struct mstar_spi *bs)//half
 {
     int  u8Index = 0;
     int  u16TempBuf = 0;
@@ -735,8 +779,8 @@ static void mstar_spi_hw_xfer_ext(struct mstar_spi *bs)
     int  j = 0;
 
     j = bs->len;
-    if (j >= MSPI_WBF_RBF_SIZE_MAX){
-        j = MSPI_WBF_RBF_SIZE_MAX;
+	if (j >= MAX_HALF_TX_BUF_SIZE) {
+		j = MAX_HALF_TX_BUF_SIZE;
     }
 
     if (bs->tx_buf != NULL)
@@ -786,14 +830,13 @@ static void mstar_spi_hw_xfer_ext(struct mstar_spi *bs)
 #else
         mstar_hw_txfillfifo(bs, bs->tx_buf, j);
 #endif
-        bs->tx_buf += j;
-        mstar_wr(bs,MSPI_WBF_RBF_SIZE,j);
-    }
-    else
-    {
-        if (bs->rx_buf != NULL)
-        {
-           mstar_wr(bs,MSPI_WBF_RBF_SIZE,j<<8);
+		(bs->tx_buf) += j;
+		mstar_wrl(bs, MSPI_WBF_RBF_SIZE, j);
+		mstar_wrh(bs, MSPI_WBF_RBF_SIZE, 0);
+	} else {
+		if (bs->rx_buf != NULL) {
+			mstar_wrh(bs, MSPI_WBF_RBF_SIZE, (j));
+			mstar_wrl(bs, MSPI_WBF_RBF_SIZE, 0);
         }
     }
     bs->len -= j;
@@ -804,42 +847,73 @@ static void mstar_spi_hw_xfer_ext(struct mstar_spi *bs)
 
 static irqreturn_t mstar_spi_interrupt(int irq, void *dev_id)
 {
-	struct spi_master *master = dev_id;
-	struct mstar_spi *bs = spi_master_get_devdata(master);
+    struct spi_master *master = dev_id;
+    struct mstar_spi *bs = spi_master_get_devdata(master);
+    unsigned long flags;
+
     MSPI_PRINT("%s %d  bs->current_trans_len=%d \n",__func__,__LINE__,bs->current_trans_len);
-    if(mstar_rd(bs,MSPI_DONE_FLAG)){
+
+    spin_lock_irqsave(&bs->lock, flags);
+    if (bs->print_irq)
+        pr_err("Error !!!! unexpected irq occurs after timeout\n");
+    if(mstar_rd(bs,MSPI_DONE_FLAG)) {
         mstar_hw_clear_done(bs);
-        if (bs->current_trans_len != 0){
-if (MSPI_DUAL_MODE == 0) // for full-deplex fifo
-            mstar_spi_hw_receive(bs);
-else  // for half-deplex fifo or dual mode used
-            mstar_spi_hw_rx_ext(bs);
-        }else{
-            return IRQ_NONE;
+        if (bs->current_trans_len != 0) {
+            if (MSPI_SPI_MODE == MSPI_SINGLE_MODE) // for full-duplex fifo
+                mstar_spi_hw_receive(bs);
+            else { // for half-duplex fifo or dual mode used
+                if (bs->fg_half_duplex == MSPI_FULL_DUPLEX) {
+                    mstar_spi_hw_receive(bs);//full
+                } else {
+                    mstar_spi_hw_rx_ext(bs);//half
+                }
+            }
         }
-        if (bs->len != 0){
-if (MSPI_DUAL_MODE == 0)  // for full-deplex fifo
-           mstar_spi_hw_transfer(bs);
-else  // for half-deplex fifo or dual mode used
-            mstar_spi_hw_xfer_ext(bs);
+        else {
+            dev_err(&master->dev, "Error:data corruption or race condition issue, please investigate!\n");
+            spin_unlock_irqrestore(&bs->lock, flags);
+            return IRQ_HANDLED;
         }
-        else{
+        if (bs->len != 0) {
+            if (MSPI_SPI_MODE == MSPI_SINGLE_MODE) { // for full-duplex fifo
+                if (bs->len > MSPI_PKT_LEN_CHK) {
+                    spin_unlock_irqrestore(&bs->lock, flags);
+                    pr_err("%s: %d SPI pkt len is too big, bs->len = %d!\n",
+                            __FUNCTION__, __LINE__, bs->len);
+                    WARN_ON_ONCE(1);
+                    return IRQ_HANDLED;
+                }
+                mstar_spi_hw_transfer(bs);
+            }
+            else  {// for half-duplex fifo or dual mode used
+                if (bs->fg_half_duplex == MSPI_FULL_DUPLEX) {
+                    mstar_spi_hw_transfer(bs);//full
+                }
+                else {
+                    mstar_spi_hw_xfer_ext(bs);//half
+                }
+            }
+        }
+        else {
             bs->current_trans_len = 0;
             complete(&bs->done);
         }
         MSPI_PRINT("%s\n",__func__);
-		return IRQ_HANDLED;
-	}
+        spin_unlock_irqrestore(&bs->lock, flags);
+        return IRQ_HANDLED;
+    }
     dev_err(&master->dev, "Error:incorrect irq num!\n");
     mstar_hw_clear_done(bs);
     MSPI_PRINT("%s\n",__func__);
-	return IRQ_NONE;
+    spin_unlock_irqrestore(&bs->lock, flags);
+    return IRQ_HANDLED;
 }
 
 static int mstar_spi_start_transfer(struct spi_device *spi,
 		struct spi_transfer *tfr)
 {
 	struct mstar_spi *bs = spi_master_get_devdata(spi->master);
+
     MSPI_PRINT("%s:%d start\n",__func__,__LINE__);
 #if CONFIG_DEBUG_MSPI
     mstar_hw_set_pin_mode(bs,spi);
@@ -876,14 +950,29 @@ static int mstar_spi_start_transfer(struct spi_device *spi,
 #else
 	reinit_completion(&bs->done);
 #endif
+
+    if (tfr->len > MSPI_PKT_LEN_CHK) {
+        pr_err("%s: %d SPI pkt len is too big, tfr->len = %u!\n",
+                __FUNCTION__, __LINE__, tfr->len);
+        WARN_ON_ONCE(1);
+        return -EINVAL;
+    }
+
     bs->tx_buf = tfr->tx_buf;
     bs->rx_buf = tfr->rx_buf;
     bs->len = tfr->len;
+	if ((bs->tx_buf == NULL) || (bs->rx_buf == NULL)) {
+		bs->fg_half_duplex = MSPI_HALF_DUPLEX;
+	} else {
+		bs->fg_half_duplex = MSPI_FULL_DUPLEX;
+	}
 
-   /*
-    *   Start transfer loop.
-    */
+    /*
+     *   Start transfer loop.
+     */
     //Check if dual mode or single mode
+    // Do not enable dual mode only run single mode
+#if 0
     u8 val = mstar_rdl(bs,MSPI_CTR2);
     if(tfr->rx_nbits == SPI_NBITS_DUAL || tfr->tx_nbits == SPI_NBITS_DUAL) {
         val|= MSPI_DUAL_MODE_BIT;
@@ -892,11 +981,18 @@ static int mstar_spi_start_transfer(struct spi_device *spi,
         val &= ~MSPI_DUAL_MODE_BIT;
     }
     mstar_wrl(bs,MSPI_CTR2,val);
+#endif
 
-if (MSPI_DUAL_MODE == 0)  // for full-deplex fifo
-    mstar_spi_hw_transfer(bs);
-else  // for half-deplex fifo or dual mode used
-    mstar_spi_hw_xfer_ext(bs);
+    if (MSPI_SPI_MODE == MSPI_SINGLE_MODE)  // for full-duplex fifo
+        mstar_spi_hw_transfer(bs);
+    else { // for half-duplex fifo or dual mode used
+        if (bs->fg_half_duplex == MSPI_FULL_DUPLEX) {
+            mstar_spi_hw_transfer(bs);//full
+        }
+        else {
+            mstar_spi_hw_xfer_ext(bs);//half
+        }
+    }
 
     MSPI_PRINT("%s:%d  end\n",__func__,__LINE__);
     return 0;
@@ -916,56 +1012,183 @@ static int mstar_spi_finish_transfer(struct spi_device *spi,
 	return 0;
 }
 
+static struct platform_device *gpdev = NULL;
+
+#if DEBUG_SPI_TIMEOUT
+struct mstar_spi_dev {
+    struct dentry *dent;
+    int dbg_counter;
+    int enable_timeout_dbg;
+};
+
+static struct mstar_spi_dev *mstar_spi_dbg;
+
+static ssize_t mstar_spi_debug_cli_write(struct file *file,
+        const char __user *ubuf,
+        size_t len, loff_t *offp)
+{
+    char buf[48];
+    int ret;
+
+    if (len >= sizeof(buf))
+        return -EINVAL;
+
+    if (copy_from_user(buf, ubuf, len))
+        return -EFAULT;
+
+    buf[len] = '\0';
+
+    if (strncmp(buf, "spi_timeout", strlen("spi_timeout")) == 0) {
+        pr_info("Enable SPI bus timeout debugging.\n");
+        mstar_spi_dbg->enable_timeout_dbg = 1;
+        mstar_spi_dbg->dbg_counter = 0;
+        return len;
+    }
+    else {
+        pr_info("unsupported cli command.\n");
+        return -EINVAL;
+    }
+    return len;
+}
+
+static const struct file_operations mstar_spi_debug_cli_fops = {
+    .write = mstar_spi_debug_cli_write,
+};
+
+static int mstar_spi_debugfs_init(void)
+{
+    struct dentry *cli_dent;
+
+    mstar_spi_dbg->dent = debugfs_create_dir("mstar_spi", NULL);
+    if (!mstar_spi_dbg->dent)
+        return -ENOMEM;
+
+    cli_dent = debugfs_create_file("cli", 0200,
+            mstar_spi_dbg->dent, NULL, &mstar_spi_debug_cli_fops);
+    if (!cli_dent)
+        goto out_err;
+
+    return 0;
+
+out_err:
+    debugfs_remove_recursive(mstar_spi_dbg->dent);
+    return -ENOMEM;
+}
+#endif
+
+void trigger_dsp_wdt(void)
+{
+    char data[32], *envp[] = { data, NULL };
+    pr_err("[%s] SPI timeout happens!\n", __func__);
+    snprintf(data, sizeof(data), "ACTION=DSP_WTD_WHOLE");
+    kobject_uevent_env(&gpdev->dev.kobj, KOBJ_CHANGE, envp);
+    pr_err("[%s][Reload DSP]\n", __func__);
+}
+
+#ifdef CONFIG_AMAZON_METRICS_LOG
+// Logs the reset metric. Called everytime a SPI transaction times out.
+static void log_timeout_metric(struct mstar_spi *bs, unsigned count) {
+    log_counter_to_vitals(ANDROID_LOG_INFO, "Kernel", "farfield", "spi", "timeouts", count, "count", NULL, VITALS_NORMAL);
+}
+#endif
+
 static int mstar_spi_transfer_one(struct spi_master *master,
-		struct spi_message *mesg)
+        struct spi_message *mesg)
 {
     struct mstar_spi *bs = spi_master_get_devdata(master);
     struct spi_transfer *tfr;
     struct spi_device *spi = mesg->spi;
     int err = 0;
+    int spi_timeout_val = MSTAR_SPI_TIMEOUT_MS;
     unsigned int timeout;
-        bool cs_change = true;
-        MSPI_PRINT("%s:%d start \n",__func__,__LINE__);
+    bool cs_change = true;
+    unsigned long flags;
 
+    MSPI_PRINT("%s:%d start \n",__func__,__LINE__);
     list_for_each_entry(tfr, &mesg->transfers, transfer_list) {
+        spin_lock_irqsave(&bs->lock, flags);
         err = mstar_spi_start_transfer(spi, tfr);
         if (err) {
             printk("%s:%d \n",__func__,__LINE__);
-    	    goto out;
-        }
-    	timeout = wait_for_completion_timeout(&bs->done,
-    			msecs_to_jiffies(MSTAR_SPI_TIMEOUT_MS));
-    	if (!timeout) {
-            printk("MSPI timeout!!%s:%d \n",__func__,__LINE__);
-            err = -ETIMEDOUT;
+            spin_unlock_irqrestore(&bs->lock, flags);
             goto out;
-    	}
-        #if 1 //8570 read command for each spi_transfer not for each list
-    	cs_change = tfr->cs_change;  // false: pull H,  ture: pull L
-        #endif
-    	err = mstar_spi_finish_transfer(spi, tfr, cs_change);
+        }
+        bs->print_irq = 0;
+#if DEBUG_SPI_TIMEOUT
+        /* Simulate SPI timeout */
+        if (unlikely(mstar_spi_dbg->enable_timeout_dbg)) {
+            if (bs->len > 5000) {
+                pr_err("[SPI_BUS_TIMEOUT_DEBUG]Skip the test logic for firmware loading, bs->len %d \n", bs->len);
+            }
+            else if (bs->len < 1024) {
+                spi_timeout_val = MSTAR_SPI_TIMEOUT_MS; // don't change default timeout for small size of data
+            }
+            else {
+                if (mstar_spi_dbg->dbg_counter > 2000) {
+                    pr_info("[SPI_BUS_TIMEOUT_DEBUG]Change timeout to 0ms every 1000 times for large size of data\n");
+                    spi_timeout_val = 0;
+                    mstar_spi_dbg->dbg_counter = 0;
+                }
+                mstar_spi_dbg->dbg_counter++;
+            }
+        }
+#endif
+        spin_unlock_irqrestore(&bs->lock, flags);
+        timeout = wait_for_completion_timeout(&bs->done,
+                msecs_to_jiffies(spi_timeout_val));
+        if (!timeout) {
+            spin_lock_irqsave(&bs->lock, flags);
+#if DEBUG_SPI_TIMEOUT
+            mstar_spi_dbg->enable_timeout_dbg = 0; /* Disable SPI bus timeout debugging */
+#endif
+            mstar_hw_enable_interrupt(bs,false); //reset interrupt
+            bs->print_irq = 1;
+            bs->len = 0;
+            spin_unlock_irqrestore(&bs->lock, flags);
+#ifdef CONFIG_AMAZON_METRICS_LOG
+            log_timeout_metric(bs, 1);
+#endif
+            pr_err("MSPI timeout!! %s:%d -- Reset DSP - len: %d, cur_len: %d, tfr_len: %u\n",
+                    __func__, __LINE__, bs->len, bs->current_trans_len, tfr->len);
+            err = -ETIMEDOUT;
+#if WAR_MT8570_DSP
+            void hifidsp_hw_pull_low(void);
+            void mtk_dsp_wdt_disable(void);
+            mtk_dsp_wdt_disable(); /* disable DSP wdt interruption */
+            hifidsp_hw_pull_low(); /* put DSP in dead state */
+#endif
+            disable_irq(bs->irq);
+            mstar_hw_clear_done(bs);
+            trigger_dsp_wdt();
+            enable_irq(bs->irq);
+            goto out;
+        }
+#if 1 //8570 read command for each spi_transfer not for each list
+        cs_change = tfr->cs_change;  // false: pull H,  ture: pull L
+#endif
+        err = mstar_spi_finish_transfer(spi, tfr, cs_change);
         if (err) {
-            printk("%s:%d \n",__func__,__LINE__);
+            printk("%s:%d \n", __func__, __LINE__);
             goto out;
         }
         mesg->actual_length += (tfr->len - bs->len);
-
+#if 0 /* No need to touch SPI mode setting register. Disable below. */
         //Disable dual mode when finished.
         u8 val = mstar_rdl(bs,MSPI_CTR2);
         val &= ~MSPI_DUAL_MODE_BIT;
         mstar_wrl(bs,MSPI_CTR2,val);
+#endif
     }
-
 out:
-
     mesg->status = err;
     spi_finalize_current_message(master);
     MSPI_PRINT("%s:%d  end\n",__func__,__LINE__);
-    return 0;
+    /* make client know error like TIMEOUT */
+    return err;
 }
 static const struct of_device_id mstar_mspi_match[] = {
-	{ .compatible = "mstar,mstar-mspi", },
-	{}
+    { .compatible = "mstar,mstar-mspi", },
+    {}
 };
 MODULE_DEVICE_TABLE(of, mstar_mspi_match);
 
@@ -1008,15 +1231,22 @@ static int mstar_spi_probe(struct platform_device *pdev)
     struct spi_master *master;
     struct mstar_spi *bs;
     int err = -ENODEV;
-	u32 prop;
-	char project_name[DTS_STRING_LENGTH];
-	char property_name[DTS_STRING_LENGTH];
+    int ret;
+    u32 prop;
+    char project_name[DTS_STRING_LENGTH];
+    char property_name[DTS_STRING_LENGTH];
 
     if (strstr(saved_command_line, "farfield.dsp.name=mt8570") == NULL) {
         pr_info("mt8570 is not supported\n");
         return -EINVAL;
     }
-
+#if DEBUG_SPI_TIMEOUT
+    mstar_spi_dbg = devm_kzalloc(&pdev->dev, sizeof(struct mstar_spi_dev), GFP_KERNEL);
+    if (!mstar_spi_dbg) {
+        pr_err("allocation for mstar spi debugfs failed\n");
+        return -ENOMEM;
+    }
+#endif
     REG_ADDR((0x0F<<9) + (0x08<<2)) &= ~(BIT(1));
     printk("DSP_ON set On %s:%d \n",__func__,__LINE__);
     msleep(200);
@@ -1024,63 +1254,77 @@ static int mstar_spi_probe(struct platform_device *pdev)
     master = spi_alloc_master(&pdev->dev, sizeof(*bs));
     if (!master) {
         dev_err(&pdev->dev, "spi_alloc_master() failed\n");
+#if DEBUG_SPI_TIMEOUT
+        if (mstar_spi_dbg)
+            devm_kfree(&pdev->dev, mstar_spi_dbg);
+#endif
         return -ENOMEM;
     }
+
+#if DEBUG_SPI_TIMEOUT
+    ret = mstar_spi_debugfs_init();
+    if (ret) {
+        pr_err("Failed to initialize mstar_spi debugfs, err = %d\n", ret);
+    }
+#endif
 
     platform_set_drvdata(pdev, master);
 
     master->mode_bits = MSTAR_SPI_MODE_BITS;
     master->bits_per_word_mask = BIT(8 - 1)|BIT(7 - 1)
-                            |BIT(6 - 1)|BIT(5 - 1)
-                            |BIT(4 - 1)|BIT(3 - 1)
-                            |BIT(2 - 1)|BIT(1 - 1);
+        |BIT(6 - 1)|BIT(5 - 1)
+        |BIT(4 - 1)|BIT(3 - 1)
+        |BIT(2 - 1)|BIT(1 - 1);
 
     master->transfer_one_message = mstar_spi_transfer_one;
     master->dev.of_node = pdev->dev.of_node;
 
     bs = spi_master_get_devdata(master);
+#ifdef CONFIG_AMAZON_METRICS_LOG
+    // Used for debugging purposes to make sure metrics work.
+    log_timeout_metric(bs, 0);
+#endif
 
-
-	snprintf((char *)project_name, DTS_STRING_LENGTH, "%s", idme_get_config_name());
-	char *hw_build_id = memchr(project_name, '_', sizeof(project_name));
-	if (hw_build_id) {
-		/*Remove hw_specific string*/
-		*hw_build_id = '\0';
-	}
+    snprintf((char *)project_name, DTS_STRING_LENGTH, "%s", idme_get_config_name());
+    char *hw_build_id = memchr(project_name, '_', sizeof(project_name));
+    if (hw_build_id) {
+        /*Remove hw_specific string*/
+        *hw_build_id = '\0';
+    }
 
     init_completion(&bs->done);
     if (of_match_device(mstar_mspi_match,&pdev->dev)){
-		snprintf((char *)property_name, DTS_STRING_LENGTH, "%s%s", "reg_", project_name);
-		if (!of_property_read_u32_index(pdev->dev.of_node, property_name, 2,&bs->regs)) {
-			printk("[mspi] bs->regs_%s: is 0x%x \n", property_name, bs->regs);
-		} else if (!of_property_read_u32_index(pdev->dev.of_node, "reg",2,&bs->regs)) {
-			printk("[mspi] bs->regs = 0x%x\n",bs->regs);
-		} else {
-			dev_err(&pdev->dev, "could not get resource\n");
-			return -EINVAL;
-		}
+        snprintf((char *)property_name, DTS_STRING_LENGTH, "%s%s", "reg_", project_name);
+        if (!of_property_read_u32_index(pdev->dev.of_node, property_name, 2,&bs->regs)) {
+            printk("[mspi] bs->regs_%s: is 0x%x \n", property_name, bs->regs);
+        } else if (!of_property_read_u32_index(pdev->dev.of_node, "reg",2,&bs->regs)) {
+            printk("[mspi] bs->regs = 0x%x\n",bs->regs);
+        } else {
+            dev_err(&pdev->dev, "could not get resource\n");
+            return -EINVAL;
+        }
 
-		snprintf((char *)property_name, DTS_STRING_LENGTH, "%s%s", "interrupts_", project_name);
-		if (!of_property_read_u32(pdev->dev.of_node, property_name, &prop)) {
-			bs->irq = prop;
-			printk("[mspi] bs->irq_%s: is %d \n", property_name, bs->irq);
-		} else if (!of_property_read_u32(pdev->dev.of_node, "interrupts",&bs->irq)) {
-			printk("[mspi] bs->irq = %d\n",bs->irq);
-		} else {
-			dev_err(&pdev->dev, "could not get resource\n");
-			return -EINVAL;
-		}
+        snprintf((char *)property_name, DTS_STRING_LENGTH, "%s%s", "interrupts_", project_name);
+        if (!of_property_read_u32(pdev->dev.of_node, property_name, &prop)) {
+            bs->irq = prop;
+            printk("[mspi] bs->irq_%s: is %d \n", property_name, bs->irq);
+        } else if (!of_property_read_u32(pdev->dev.of_node, "interrupts",&bs->irq)) {
+            printk("[mspi] bs->irq = %d\n",bs->irq);
+        } else {
+            dev_err(&pdev->dev, "could not get resource\n");
+            return -EINVAL;
+        }
 
-		snprintf((char *)property_name, DTS_STRING_LENGTH, "%s%s", "mspi_channel_", project_name);
-		if (!of_property_read_u32(pdev->dev.of_node, property_name, &prop)) {
-			bs->mspi_channel = prop;
-			printk("[mspi] bs->mspi_channel_%s: is %d \n", property_name, bs->mspi_channel);
-		} else if (!of_property_read_u32(pdev->dev.of_node, "mspi_channel",&bs->mspi_channel)) {
-			printk("[mspi] bs->mspi_channel = %d\n",bs->mspi_channel);
-		} else {
-			dev_err(&pdev->dev, "could not get resource\n");
-			return -EINVAL;
-		}
+        snprintf((char *)property_name, DTS_STRING_LENGTH, "%s%s", "mspi_channel_", project_name);
+        if (!of_property_read_u32(pdev->dev.of_node, property_name, &prop)) {
+            bs->mspi_channel = prop;
+            printk("[mspi] bs->mspi_channel_%s: is %d \n", property_name, bs->mspi_channel);
+        } else if (!of_property_read_u32(pdev->dev.of_node, "mspi_channel",&bs->mspi_channel)) {
+            printk("[mspi] bs->mspi_channel = %d\n",bs->mspi_channel);
+        } else {
+            dev_err(&pdev->dev, "could not get resource\n");
+            return -EINVAL;
+        }
 
         err = of_property_read_u32(pdev->dev.of_node, "num_chipselect",&bs->num_chipselect);
         if (err){
@@ -1124,15 +1368,14 @@ static int mstar_spi_probe(struct platform_device *pdev)
         dev_err(&pdev->dev, "could not get resource  %d\n",__LINE__);
         return -EINVAL;
     }
-
+    bs->fg_half_duplex = MSPI_HALF_DUPLEX;
     err = devm_request_irq(&pdev->dev,bs->irq, mstar_spi_interrupt, 0,
-        dev_name(&pdev->dev), master);
+            dev_name(&pdev->dev), master);
     if (err) {
         dev_err(&pdev->dev, "could not request IRQ: %d:%d\n", bs->irq,err);
         return err;
     }
 
-    master->rt = true;
     err = spi_register_master(master);
     if (err) {
         dev_err(&pdev->dev, "could not register SPI master: %d\n", err);
@@ -1140,18 +1383,20 @@ static int mstar_spi_probe(struct platform_device *pdev)
     }
 
     u32 spi_cfg = 0;
-    if (strstr(saved_command_line, "SPI_MODE=1")) {  // dual mode xfer
-        printk ("SPI_MODE=1 \n");
-        MSPI_DUAL_MODE = 1;
-        mspi_rxfifoaddr = &mspi_rxfifoaddr_halfdeplex;
-        MSPI_WBF_RBF_SIZE_MAX = 2*(int)( sizeof(mspi_rxfifoaddr_halfdeplex) / sizeof(mspi_rxfifoaddr_halfdeplex[0]) );
+    if (strstr(saved_command_line, "SPI_MODE=2")) {  // dual mode xfer
+        MSPI_SPI_MODE = MSPI_DUAL_MODE;
+        mspi_rxfifoaddr = &mspi_rxfifoaddr_halfduplex;
+        MSPI_WBF_RBF_SIZE_MAX = 2 * (int) (sizeof(mspi_rxfifoaddr_halfduplex) / sizeof(mspi_rxfifoaddr_halfduplex[0]));
+    } else if (strstr(saved_command_line, "SPI_MODE=1")) {  // single mode xfer full duplex
+        MSPI_SPI_MODE = MSPI_SINGLE_MODE;
+        mspi_rxfifoaddr = &mspi_rxfifoaddr_fullduplex;
+        MSPI_WBF_RBF_SIZE_MAX = 2 * (int) (sizeof(mspi_rxfifoaddr_fullduplex) / sizeof(mspi_rxfifoaddr_fullduplex[0]));
+    } else { // single mode & half duplex
+        MSPI_SPI_MODE = MSPI_SINGLE_MODE_HALF_DUPLEX;
+        mspi_rxfifoaddr = &mspi_rxfifoaddr_halfduplex;
+        MSPI_WBF_RBF_SIZE_MAX = 2 * (int) (sizeof(mspi_rxfifoaddr_halfduplex) / sizeof(mspi_rxfifoaddr_halfduplex[0]));
     }
-    else {
-        MSPI_DUAL_MODE = 0;
-        mspi_rxfifoaddr = &mspi_rxfifoaddr_fulldeplex;
-        MSPI_WBF_RBF_SIZE_MAX = 2*(int)( sizeof(mspi_rxfifoaddr_fulldeplex) / sizeof(mspi_rxfifoaddr_fulldeplex[0]) );
 
-    }
     printk ("MSPI_WBF_RBF_SIZE_MAX=%d \n",MSPI_WBF_RBF_SIZE_MAX);
     int i;
     for(i=0;i<MSPI_WBF_RBF_SIZE_MAX/2;i++)
@@ -1176,21 +1421,24 @@ static int mstar_spi_probe(struct platform_device *pdev)
     }
     printk ("SPI_SPEED_HIGH=%u \n",spi_cfg);
     mstar_hw_parsing_clock_table((!SPI_SPEED_LOW),spi_cfg);
-
+    gpdev = pdev;
     return 0;
 }
 
 static int mstar_spi_remove(struct platform_device *pdev)
 {
-	struct spi_master *master = platform_get_drvdata(pdev);
-	struct mstar_spi *bs = spi_master_get_devdata(master);
+    struct spi_master *master = platform_get_drvdata(pdev);
+    struct mstar_spi *bs = spi_master_get_devdata(master);
 
-	devm_free_irq(&pdev->dev,bs->irq, master);
-	spi_unregister_master(master);
+    devm_free_irq(&pdev->dev,bs->irq, master);
+    spi_unregister_master(master);
 
-	spi_master_put(master);
-
-	return 0;
+    spi_master_put(master);
+#if DEBUG_SPI_TIMEOUT
+    debugfs_remove_recursive(mstar_spi_dbg->dent);
+    devm_kfree(&pdev->dev, mstar_spi_dbg);
+#endif
+    return 0;
 }
 
 static int mstar_spi_pm_resume(struct platform_device *pdev)

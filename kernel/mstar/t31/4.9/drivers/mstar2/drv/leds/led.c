@@ -103,25 +103,25 @@ typedef enum{
 	LED_INVERT_2,
 	LED_STANDBY_SETTING_ON,
 	LED_STANDBY_SETTING_OFF,
-	LED_ON_1_abc123, //20
-	LED_OFF_1_abc123,
-	LED_BLINK_ONCE_1_abc123,
-	LED_KEEP_BLINK_1_abc123,
-	LED_ON_PERCENTAGE_1_abc123,
-	LED_BLINK_ONCE_AND_ON_1_abc123,
-	LED_ON_2_abc123, //26
-	LED_OFF_2_abc123,
-	LED_BLINK_ONCE_2_abc123,
-	LED_KEEP_BLINK_2_abc123,
-	LED_ON_PERCENTAGE_2_abc123,
-	LED_BLINK_ONCE_AND_ON_2_abc123,
-	LED_BLINK_500_500_1_abc123, //32
-	LED_BLINK_250_250_1_abc123,
-	LED_BLINK_1800_200_1_abc123,
-	LED_BLINK_500_500_2_abc123,
-	LED_BLINK_250_250_2_abc123,
-	LED_BLINK_ARBITRARY_VALUE_1_abc123, //37
-	LED_BLINK_ARBITRARY_VALUE_2_abc123,
+	LED_ON_1_BOXER, //20
+	LED_OFF_1_BOXER,
+	LED_BLINK_ONCE_1_BOXER,
+	LED_KEEP_BLINK_1_BOXER,
+	LED_ON_PERCENTAGE_1_BOXER,
+	LED_BLINK_ONCE_AND_ON_1_BOXER,
+	LED_ON_2_BOXER, //26
+	LED_OFF_2_BOXER,
+	LED_BLINK_ONCE_2_BOXER,
+	LED_KEEP_BLINK_2_BOXER,
+	LED_ON_PERCENTAGE_2_BOXER,
+	LED_BLINK_ONCE_AND_ON_2_BOXER,
+	LED_BLINK_500_500_1_BOXER, //32
+	LED_BLINK_250_250_1_BOXER,
+	LED_BLINK_1800_200_1_BOXER,
+	LED_BLINK_500_500_2_BOXER,
+	LED_BLINK_250_250_2_BOXER,
+	LED_BLINK_ARBITRARY_VALUE_1_BOXER, //37
+	LED_BLINK_ARBITRARY_VALUE_2_BOXER,
 } LED_CONTROL;
 
 
@@ -147,24 +147,24 @@ typedef enum{
 #define LED_PWMGPIO_FLICKER_2 0xCE			/* LED 2 blink once		*/
 #define LED_PWMGPIO_FLICKER_POWERON_2 0xCF	/* LED 2 keep blinking	*/
 
-/* New command for abc123 */
-#define LED_PWMGPIO_LIGHT_1_abc123             0xD0
-#define LED_PWMGPIO_DARK_1_abc123              0xD1
-#define LED_PWMGPIO_FLICKER_POWERON_1_abc123   0xD2
-#define LED_PWMGPIO_LIGHT_PERCENTAGE_1_abc123    0xD3
-#define LED_PWMGPIO_LIGHT_2_abc123             0xD4
-#define LED_PWMGPIO_DARK_2_abc123              0xD5
-#define LED_PWMGPIO_FLICKER_POWERON_2_abc123   0xD6
-#define LED_PWMGPIO_LIGHT_PERCENTAGE_2_abc123    0xD7
-#define LED_PWMGPIO_FLICKER_WITH_PARA_1_abc123        0xD8
-#define LED_PWMGPIO_FLICKER_WITH_PARA_2_abc123        0xD9
+/* New command for Boxer */
+#define LED_PWMGPIO_LIGHT_1_BOXER             0xD0
+#define LED_PWMGPIO_DARK_1_BOXER              0xD1
+#define LED_PWMGPIO_FLICKER_POWERON_1_BOXER   0xD2
+#define LED_PWMGPIO_LIGHT_PERCENTAGE_1_BOXER    0xD3
+#define LED_PWMGPIO_LIGHT_2_BOXER             0xD4
+#define LED_PWMGPIO_DARK_2_BOXER              0xD5
+#define LED_PWMGPIO_FLICKER_POWERON_2_BOXER   0xD6
+#define LED_PWMGPIO_LIGHT_PERCENTAGE_2_BOXER    0xD7
+#define LED_PWMGPIO_FLICKER_WITH_PARA_1_BOXER        0xD8
+#define LED_PWMGPIO_FLICKER_WITH_PARA_2_BOXER        0xD9
 
 #define E_PM_CMDIDX_ACK_51ToARM 0x31  /*Need to double confirm this once get the RT_PM source code */
 
 #define LED_1_CTRL_FLAG 0x0100
 #define LED_2_CTRL_FLAG 0x0200
-#define LED_1_CTRL_OFF_FLAG_abc123 0x0400
-#define LED_2_CTRL_OFF_FLAG_abc123 0x0800
+#define LED_1_CTRL_OFF_FLAG_BOXER 0x0400
+#define LED_2_CTRL_OFF_FLAG_BOXER 0x0800
 
 #define STANDBY_LED_ARG "standby_led="
 
@@ -419,75 +419,75 @@ MBX_Result LED_DRV_Ctrl(MS_U16 var, const unsigned int parameter, const unsigned
 		pr_info("Turn on LED 2 invert=%d\n", parameter);
 		break;
 
-/* Setting for abc123 */
-	case LED_ON_1_abc123:
-		command = LED_PWMGPIO_LIGHT_1_abc123;
+/* Setting for Boxer */
+	case LED_ON_1_BOXER:
+		command = LED_PWMGPIO_LIGHT_1_BOXER;
 		led_1_status = 1;
-		printk("Turn on LED 1 for abc123\n");
+		printk("Turn on LED 1 for Boxer\n");
 		if (led_2_status == 1) {
-			command |= LED_2_CTRL_OFF_FLAG_abc123;
+			command |= LED_2_CTRL_OFF_FLAG_BOXER;
 		}
 		break;
-	case LED_OFF_1_abc123:
-		command = LED_PWMGPIO_DARK_1_abc123;
+	case LED_OFF_1_BOXER:
+		command = LED_PWMGPIO_DARK_1_BOXER;
 		led_1_status = 0;
-		printk("Turn off LED 1 for abc123\n");
+		printk("Turn off LED 1 for Boxer\n");
 		break;
-	case LED_KEEP_BLINK_1_abc123:
-		command = LED_PWMGPIO_FLICKER_POWERON_1_abc123;
+	case LED_KEEP_BLINK_1_BOXER:
+		command = LED_PWMGPIO_FLICKER_POWERON_1_BOXER;
 		if (led_2_status == 1) {
-			command |= LED_2_CTRL_OFF_FLAG_abc123;
+			command |= LED_2_CTRL_OFF_FLAG_BOXER;
 		}
 		stMbxCommand.u8Parameters[0] = (MS_U8)(parameter);
-		printk("LED 1 keep blinking parameter=%d for abc123\n", parameter);
+		printk("LED 1 keep blinking parameter=%d for Boxer\n", parameter);
 		led_1_status = 1;
 		break;
-	case LED_ON_PERCENTAGE_1_abc123:
-		command = LED_PWMGPIO_LIGHT_PERCENTAGE_1_abc123;
+	case LED_ON_PERCENTAGE_1_BOXER:
+		command = LED_PWMGPIO_LIGHT_PERCENTAGE_1_BOXER;
 		if (led_2_status == 1) {
-			command |= LED_2_CTRL_OFF_FLAG_abc123;
+			command |= LED_2_CTRL_OFF_FLAG_BOXER;
 		}
 		stMbxCommand.u8Parameters[0] = (MS_U8)(parameter);
 		stMbxCommand.u8Parameters[1] = (MS_U8)(parameter2);
 		led_1_status = 1;
-		printk("Turn on LED 1 percentage=%u.%u%% for abc123\n", parameter, parameter2);
+		printk("Turn on LED 1 percentage=%u.%u%% for Boxer\n", parameter, parameter2);
 		break;
-	case LED_ON_2_abc123:
-		command = LED_PWMGPIO_LIGHT_2_abc123;
+	case LED_ON_2_BOXER:
+		command = LED_PWMGPIO_LIGHT_2_BOXER;
 		led_2_status = 1;
-		printk("Turn on LED 2 for abc123\n");
+		printk("Turn on LED 2 for Boxer\n");
 		if (led_1_status == 1) {
-			command |= LED_1_CTRL_OFF_FLAG_abc123;
+			command |= LED_1_CTRL_OFF_FLAG_BOXER;
 		}
 		break;
-	case LED_OFF_2_abc123:
-		command = LED_PWMGPIO_DARK_2_abc123;
+	case LED_OFF_2_BOXER:
+		command = LED_PWMGPIO_DARK_2_BOXER;
 		led_2_status = 0;
-		printk("Turn off LED 2 for abc123\n");
+		printk("Turn off LED 2 for Boxer\n");
 		break;
-	case LED_KEEP_BLINK_2_abc123:
-		command = LED_PWMGPIO_FLICKER_POWERON_2_abc123;
+	case LED_KEEP_BLINK_2_BOXER:
+		command = LED_PWMGPIO_FLICKER_POWERON_2_BOXER;
 		if (led_1_status == 1) {
-			command |= LED_1_CTRL_OFF_FLAG_abc123;
+			command |= LED_1_CTRL_OFF_FLAG_BOXER;
 		}
 		stMbxCommand.u8Parameters[0] = (MS_U8)(parameter);
-		printk("LED 2 keep blinking parameter=%d for abc123\n", parameter);
+		printk("LED 2 keep blinking parameter=%d for Boxer\n", parameter);
 		led_2_status = 1;
 		break;
-	case LED_ON_PERCENTAGE_2_abc123:
-		command = LED_PWMGPIO_LIGHT_PERCENTAGE_2_abc123;
+	case LED_ON_PERCENTAGE_2_BOXER:
+		command = LED_PWMGPIO_LIGHT_PERCENTAGE_2_BOXER;
 		if (led_1_status == 1) {
-			command |= LED_1_CTRL_OFF_FLAG_abc123;
+			command |= LED_1_CTRL_OFF_FLAG_BOXER;
 		}
 		stMbxCommand.u8Parameters[0] = (MS_U8)(parameter);
 		stMbxCommand.u8Parameters[1] = (MS_U8)(parameter2);
 		led_2_status = 1;
-		printk("Turn on LED 2 percentage=%u.%u%% for abc123\n", parameter, parameter2);
+		printk("Turn on LED 2 percentage=%u.%u%% for Boxer\n", parameter, parameter2);
 		break;
-	case LED_BLINK_500_500_1_abc123:
-		command = LED_PWMGPIO_FLICKER_WITH_PARA_1_abc123;
+	case LED_BLINK_500_500_1_BOXER:
+		command = LED_PWMGPIO_FLICKER_WITH_PARA_1_BOXER;
 		if (led_2_status == 1) {
-			command |= LED_2_CTRL_OFF_FLAG_abc123;
+			command |= LED_2_CTRL_OFF_FLAG_BOXER;
 		}
 		stMbxCommand.u8Parameters[0] = 0; //cycle
 		stMbxCommand.u8Parameters[1] = 50; // 50x10 ms ON
@@ -495,10 +495,10 @@ MBX_Result LED_DRV_Ctrl(MS_U16 var, const unsigned int parameter, const unsigned
 		led_1_status = 1;
 		break;
 
-	case LED_BLINK_250_250_1_abc123:
-		command = LED_PWMGPIO_FLICKER_WITH_PARA_1_abc123;
+	case LED_BLINK_250_250_1_BOXER:
+		command = LED_PWMGPIO_FLICKER_WITH_PARA_1_BOXER;
 		if (led_2_status == 1) {
-			command |= LED_2_CTRL_OFF_FLAG_abc123;
+			command |= LED_2_CTRL_OFF_FLAG_BOXER;
 		}
 		stMbxCommand.u8Parameters[0] = 0; //cycle
 		stMbxCommand.u8Parameters[1] = 25; // 25x10 ms ON
@@ -506,10 +506,10 @@ MBX_Result LED_DRV_Ctrl(MS_U16 var, const unsigned int parameter, const unsigned
 		led_1_status = 1;
 		break;
 
-	case LED_BLINK_1800_200_1_abc123:
-		command = LED_PWMGPIO_FLICKER_WITH_PARA_1_abc123;
+	case LED_BLINK_1800_200_1_BOXER:
+		command = LED_PWMGPIO_FLICKER_WITH_PARA_1_BOXER;
 		if (led_2_status == 1) {
-			command |= LED_2_CTRL_OFF_FLAG_abc123;
+			command |= LED_2_CTRL_OFF_FLAG_BOXER;
 		}
 		stMbxCommand.u8Parameters[0] = 0; //cycle
 		stMbxCommand.u8Parameters[1] = 180; // 180x10 ms ON
@@ -517,10 +517,10 @@ MBX_Result LED_DRV_Ctrl(MS_U16 var, const unsigned int parameter, const unsigned
 		led_1_status = 1;
 		break;
 
-	case LED_BLINK_500_500_2_abc123:
-		command = LED_PWMGPIO_FLICKER_WITH_PARA_2_abc123;
+	case LED_BLINK_500_500_2_BOXER:
+		command = LED_PWMGPIO_FLICKER_WITH_PARA_2_BOXER;
 		if (led_1_status == 1) {
-			command |= LED_1_CTRL_OFF_FLAG_abc123;
+			command |= LED_1_CTRL_OFF_FLAG_BOXER;
 		}
 		stMbxCommand.u8Parameters[0] = 0; //cycle
 		stMbxCommand.u8Parameters[1] = 50; // 50x10 ms ON
@@ -528,10 +528,10 @@ MBX_Result LED_DRV_Ctrl(MS_U16 var, const unsigned int parameter, const unsigned
 		led_2_status = 1;
 		break;
 
-	case LED_BLINK_250_250_2_abc123:
-		command = LED_PWMGPIO_FLICKER_WITH_PARA_2_abc123;
+	case LED_BLINK_250_250_2_BOXER:
+		command = LED_PWMGPIO_FLICKER_WITH_PARA_2_BOXER;
 		if (led_1_status == 1) {
-			command |= LED_1_CTRL_OFF_FLAG_abc123;
+			command |= LED_1_CTRL_OFF_FLAG_BOXER;
 		}
 		stMbxCommand.u8Parameters[0] = 0; //cycle
 		stMbxCommand.u8Parameters[1] = 25; // 25x10 ms ON
@@ -539,15 +539,15 @@ MBX_Result LED_DRV_Ctrl(MS_U16 var, const unsigned int parameter, const unsigned
 		led_2_status = 1;
 		break;
 
-	case LED_BLINK_ARBITRARY_VALUE_1_abc123:
-		command = LED_PWMGPIO_FLICKER_WITH_PARA_1_abc123;
+	case LED_BLINK_ARBITRARY_VALUE_1_BOXER:
+		command = LED_PWMGPIO_FLICKER_WITH_PARA_1_BOXER;
 		stMbxCommand.u8Parameters[0] = (MS_U8)(parameter); //cycle
 		stMbxCommand.u8Parameters[1] = (MS_U8)(parameter2); // Nx10 ms ON
 		stMbxCommand.u8Parameters[2] = (MS_U8)(parameter3); // Nx10 ms off
 		break;
 
-	case LED_BLINK_ARBITRARY_VALUE_2_abc123:
-		command = LED_PWMGPIO_FLICKER_WITH_PARA_2_abc123;
+	case LED_BLINK_ARBITRARY_VALUE_2_BOXER:
+		command = LED_PWMGPIO_FLICKER_WITH_PARA_2_BOXER;
 		stMbxCommand.u8Parameters[0] = (MS_U8)(parameter); //cycle
 		stMbxCommand.u8Parameters[1] = (MS_U8)(parameter2); // Nx10 ms ON
 		stMbxCommand.u8Parameters[2] = (MS_U8)(parameter3); // Nx10 ms off
@@ -573,18 +573,18 @@ MBX_Result LED_DRV_Ctrl(MS_U16 var, const unsigned int parameter, const unsigned
 		udelay(5);
 	}
 
-/* Setting for abc123 */
-	if ((command & LED_1_CTRL_OFF_FLAG_abc123) == LED_1_CTRL_OFF_FLAG_abc123) {
-		stMbxCommand.u8Index = LED_PWMGPIO_DARK_1_abc123;
+/* Setting for Boxer */
+	if ((command & LED_1_CTRL_OFF_FLAG_BOXER) == LED_1_CTRL_OFF_FLAG_BOXER) {
+		stMbxCommand.u8Index = LED_PWMGPIO_DARK_1_BOXER;
 		enMbxResult = MDrv_MBX_SendMsg(&stMbxCommand);
-		printk("LED_DRV_Ctrl, Turn off abc123 led 1 firstly, result is 0x%x\n", enMbxResult);
+		printk("LED_DRV_Ctrl, Turn off Boxer led 1 firstly, result is 0x%x\n", enMbxResult);
 		led_1_status = 0;
 		udelay(5);
 	}
-	if ((command & LED_2_CTRL_OFF_FLAG_abc123) == LED_2_CTRL_OFF_FLAG_abc123) {
-		stMbxCommand.u8Index = LED_PWMGPIO_DARK_2_abc123;
+	if ((command & LED_2_CTRL_OFF_FLAG_BOXER) == LED_2_CTRL_OFF_FLAG_BOXER) {
+		stMbxCommand.u8Index = LED_PWMGPIO_DARK_2_BOXER;
 		enMbxResult = MDrv_MBX_SendMsg(&stMbxCommand);
-		printk("LED_DRV_Ctrl, Turn off abc123 led 2 firstly, result is 0x%x\n", enMbxResult);
+		printk("LED_DRV_Ctrl, Turn off Boxer led 2 firstly, result is 0x%x\n", enMbxResult);
 		led_2_status = 0;
 		udelay(5);
 	}
@@ -707,40 +707,40 @@ static ssize_t led_set(struct device *dev, struct device_attribute *attr,
 			goto led_set_end;
 		}
 
-/* LED for abc123*/
-		if (action == LED_BLINK_ONCE_AND_ON_1_abc123|| action == LED_BLINK_ONCE_1_abc123) {
+/* LED for Boxer*/
+		if (action == LED_BLINK_ONCE_AND_ON_1_BOXER|| action == LED_BLINK_ONCE_1_BOXER) {
 			if (led_1_status == 1) {
-				LED_DRV_Ctrl(LED_OFF_1_abc123, 0, parameter2,parameter3);
+				LED_DRV_Ctrl(LED_OFF_1_BOXER, 0, parameter2,parameter3);
 				udelay(100);
 			}
-			LED_DRV_Ctrl(LED_ON_1_abc123, 0, parameter2,parameter3);
+			LED_DRV_Ctrl(LED_ON_1_BOXER, 0, parameter2,parameter3);
 			msleep(100);
-			LED_DRV_Ctrl(LED_OFF_1_abc123, 0, parameter2,parameter3);
-			if (action == LED_BLINK_ONCE_AND_ON_1_abc123) {
+			LED_DRV_Ctrl(LED_OFF_1_BOXER, 0, parameter2,parameter3);
+			if (action == LED_BLINK_ONCE_AND_ON_1_BOXER) {
 				msleep(100);
-				LED_DRV_Ctrl(LED_ON_1_abc123, 0, parameter2,parameter3);
+				LED_DRV_Ctrl(LED_ON_1_BOXER, 0, parameter2,parameter3);
 			}
 			msleep(400);
 			goto led_set_end;
 		}
 
-		if (action == LED_BLINK_ONCE_AND_ON_2_abc123|| action == LED_BLINK_ONCE_2_abc123) {
+		if (action == LED_BLINK_ONCE_AND_ON_2_BOXER|| action == LED_BLINK_ONCE_2_BOXER) {
 			if (led_2_status == 1) {
-				LED_DRV_Ctrl(LED_OFF_2_abc123, 0, parameter2,parameter3);
+				LED_DRV_Ctrl(LED_OFF_2_BOXER, 0, parameter2,parameter3);
 				udelay(100);
 			}
-			LED_DRV_Ctrl(LED_ON_2_abc123, 0, parameter2,parameter3);
+			LED_DRV_Ctrl(LED_ON_2_BOXER, 0, parameter2,parameter3);
 			msleep(100);
-			LED_DRV_Ctrl(LED_OFF_2_abc123, 0, parameter2,parameter3);
-			if (action == LED_BLINK_ONCE_AND_ON_2_abc123) {
+			LED_DRV_Ctrl(LED_OFF_2_BOXER, 0, parameter2,parameter3);
+			if (action == LED_BLINK_ONCE_AND_ON_2_BOXER) {
 				msleep(100);
-				LED_DRV_Ctrl(LED_ON_2_abc123, 0, parameter2,parameter3);
+				LED_DRV_Ctrl(LED_ON_2_BOXER, 0, parameter2,parameter3);
 			}
 			msleep(400);
 			goto led_set_end;
 		}
 
-		if (action == LED_KEEP_BLINK_1_abc123 || action == LED_KEEP_BLINK_2_abc123) {
+		if (action == LED_KEEP_BLINK_1_BOXER || action == LED_KEEP_BLINK_2_BOXER) {
 			parameter = 1;
 			LED_DRV_Ctrl(action, parameter, parameter2,parameter3);
 			goto led_set_end;

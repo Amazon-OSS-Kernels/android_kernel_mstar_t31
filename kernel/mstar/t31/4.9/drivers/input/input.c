@@ -139,7 +139,16 @@ int soft_trigger_event(unsigned long scancode,unsigned long keycode){
 		keycode = KEY_RESERVED;
 	}
 
-	if ((keycode == KEY_RESERVED) || ((keycode != KEY_POWER_CEC) && (keycode != KEY_APP1) && (keycode != KEY_APP2) && (keycode != KEY_APP3) && (keycode != KEY_APP4) && (keycode != KEY_IMDB_TV) && (keycode != KEY_HULU))) {
+	if ((keycode == KEY_RESERVED) ||
+	   ((keycode != KEY_POWER_CEC) &&
+	   (keycode != KEY_APP1) &&
+	   (keycode != KEY_APP2) &&
+	   (keycode != KEY_APP3) &&
+	   (keycode != KEY_APP4) &&
+	   (keycode != KEY_IMDB_TV) &&
+	   (keycode != KEY_HULU) &&
+	   (keycode != KEY_BUTTON1) &&
+	   (keycode != KEY_BUTTON2))) {
 		pr_err("Use KEY_POWER as default key, keycode =0x%4x\n", keycode);
 		keycode = KEY_POWER;
 	}

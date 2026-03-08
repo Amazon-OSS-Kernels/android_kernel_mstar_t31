@@ -53,6 +53,7 @@ extern int spi_clr_register32(u32 addr, u32 val, u32 speed);
 extern int spi_write_register_mask(u32 addr, u32 val, u32 msk, u32 speed);
 
 extern int hifi4dsp_spi_get_status(void);
+extern void hifi4dsp_spi_set_config_mode_status(int status);
 extern int spi_config_MSB(void);
 
 #endif /*_H_HIFI4DSP_SPI_H_*/
