@@ -609,15 +609,7 @@ typedef struct _IO_CPU_calibrating_INFO
 //static long CPU_calibrating_proc_ioctl(struct file *filp, unsigned int cmd, IO_CPU_calibrating_INFO* message_buf)
 static long CPU_calibrating_proc_ioctl(struct file *filp, unsigned int cmd, unsigned long message_buf)
 {
-	IO_CPU_calibrating_INFO* bb = (IO_CPU_calibrating_INFO *)message_buf;
-	char usr_buf[256];
-
-	if (copy_from_user(usr_buf, bb->MESSAGE_BUFF, bb->MESSAGE_LEN))
-	{
-		printk(KERN_ERR "setgreq_proc_ioctl error\n");
-		return -EFAULT;
-	}
-
+	// do nothing
 	return 0;
 }
 
