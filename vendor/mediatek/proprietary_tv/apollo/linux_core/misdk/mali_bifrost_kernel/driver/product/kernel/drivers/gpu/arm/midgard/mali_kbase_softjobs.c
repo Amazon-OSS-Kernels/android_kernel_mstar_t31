@@ -917,9 +917,17 @@ static int kbase_jit_allocate_prepare(struct kbase_jd_atom *katom)
 	__user void *data = (__user void *)(uintptr_t) katom->jc;
 	struct base_jit_alloc_info *info;
 	struct kbase_context *kctx = katom->kctx;
+	struct kbase_device *kbdev = kctx->kbdev;
 	u32 count;
 	int ret;
 	u32 i;
+
+	if (!kbase_mem_allow_alloc(kctx)) {
+			dev_dbg(kbdev->dev, "Invalid attempt to allocate JIT memory by %s/%d for ctx %d_%d",
+				current->comm, current->pid, kctx->tgid, kctx->id);
+			ret = -EINVAL;
+			goto fail;
+		}
 
 	/* For backwards compatibility */
 	if (katom->nr_extres == 0)
