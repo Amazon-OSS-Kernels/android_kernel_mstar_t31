@@ -118,7 +118,6 @@ void mstar_spi_init(unsigned int max_hz, unsigned int mode)
     // Config for MSPI Chip Select Pad
     MDrv_MasterSPI_CsPadConfig(channel, 0xFF);
     MDrv_MSPI_Info_Config(&stMspi_Info);
-    
 }
 
 static int chip_cs = 0;
@@ -133,17 +132,6 @@ struct spi_slave *spi_setup_slave(unsigned int bus, unsigned int cs,
     {
         return NULL;
     }
-    
-    #if (ENABLE_CMD_SF == 1)
-    // For mooney demura external flash padmux configuration
-    // Using LocalDiming MSPI0
-    printf("Configure %s MSPI_%d pin\n", CONFIG_MSTAR_CHIP_NAME, bus);
-    if (MDrv_MSPI_CFG_PIN(bus) != 0)
-    {
-        printf("Do not support configure MSPI_%d\n", bus);
-        return NULL;
-    }
-    #endif
 
     channel = bus;
     slave->bus = bus;
@@ -231,10 +219,12 @@ void spi_cs_activate(struct spi_slave *slave)
 {
     chip_cs = 1;
     mstar_spi_ChipSelect(!chip_cs_invert);
+    MDrv_MSPI_DEMURA_CS_OUT(0);
 }
 
 void spi_cs_deactivate(struct spi_slave *slave)
 {
     chip_cs = 0;
     mstar_spi_ChipSelect(chip_cs_invert);
+    MDrv_MSPI_DEMURA_CS_OUT(1);
 }
