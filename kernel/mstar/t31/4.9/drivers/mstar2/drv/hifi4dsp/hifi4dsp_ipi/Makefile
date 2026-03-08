@@ -14,6 +14,7 @@
 EXTRA_CFLAGS      +=  -Idrivers/mstar2/include
 
 subdir-ccflags-y += -I$(src)/common/
+subdir-ccflags-y += -I$(srctree)/drivers/mstar2/drv/hifi4dsp/hifi4dsp_audio_ipi/common/framework
 obj-y += common/
 
 ifneq ($(filter y,$(CONFIG_MTK_HIFI4DSP_SUPPORT)),)
