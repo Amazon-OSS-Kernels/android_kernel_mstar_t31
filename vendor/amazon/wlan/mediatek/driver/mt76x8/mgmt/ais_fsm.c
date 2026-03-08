@@ -1084,7 +1084,9 @@ VOID aisFsmSteps(IN P_ADAPTER_T prAdapter, ENUM_AIS_STATE_T eNextState)
 									cnmTimerStopTimer(prAdapter,
 										&prAdapter->rWifiVar.rDBDCDisableCountdownTimer);
 
-								if (timerPendingTimer(&prAdapter->rWifiVar.rDBDCSwitchGuardTimer))
+								/* only stop pening Switch Guard Timer when DBDC is being disabled */
+								if (timerPendingTimer(&prAdapter->rWifiVar.rDBDCSwitchGuardTimer) &&
+									!prAdapter->rWifiVar.fgDbDcModeEn)
 									cnmTimerStopTimer(prAdapter,
 										&prAdapter->rWifiVar.rDBDCSwitchGuardTimer);
 
@@ -1953,11 +1955,15 @@ VOID aisFsmStateAbort(IN P_ADAPTER_T prAdapter, UINT_8 ucReasonOfDisconnect, BOO
 		break;
 
 	case AIS_STATE_REQ_REMAIN_ON_CHANNEL:
+		fgIsCheckConnected = TRUE;
+
 		/* release channel */
 		aisFsmReleaseCh(prAdapter);
 		break;
 
 	case AIS_STATE_REMAIN_ON_CHANNEL:
+		fgIsCheckConnected = TRUE;
+
 		/* 1. release channel */
 		aisFsmReleaseCh(prAdapter);
 
@@ -2279,6 +2285,8 @@ enum _ENUM_AIS_STATE_T aisFsmJoinCompleteAction(IN struct _ADAPTER_T *prAdapter,
 				}
 			}
 		}
+		DBGLOG(AIS, STATE, "Joined BSS eBand %d channel %d ucChannelBw %d\n", prAisBssInfo->eBand,
+                       prAisBssInfo->ucPrimaryChannel, rlmDomainGetChannelBw(prAisBssInfo->ucPrimaryChannel));
 	return eNextState;
 }
 
@@ -4002,7 +4010,7 @@ aisDeauthXmitComplete(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo, IN 
 	ASSERT(prAdapter);
 
 	prAisFsmInfo = &(prAdapter->rWifiVar.rAisFsmInfo);
-	if (rTxDoneStatus == TX_RESULT_SUCCESS)
+	if (rTxDoneStatus == TX_RESULT_SUCCESS || rTxDoneStatus == TX_RESULT_DROPPED_IN_DRIVER)
 		cnmTimerStopTimer(prAdapter, &prAisFsmInfo->rDeauthDoneTimer);
 
 	if (prAisFsmInfo->eCurrentState == AIS_STATE_DISCONNECTING) {
