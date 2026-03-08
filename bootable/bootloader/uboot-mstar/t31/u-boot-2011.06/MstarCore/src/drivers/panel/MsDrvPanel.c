@@ -1346,9 +1346,8 @@ void MsDrv_PNL_BackLight_On(void)
 	{
         #if defined(CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC)
         PWM_init();
-        #else
-		MApi_PNL_SetBackLight(BACKLITE_INIT_SETTING);//Power on backlight
         #endif
+		MApi_PNL_SetBackLight(BACKLITE_INIT_SETTING);//Power on backlight
 	}
 	else
 	{
