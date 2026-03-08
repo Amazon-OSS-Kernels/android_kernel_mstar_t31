@@ -1279,7 +1279,6 @@ int Str2U16Array(char *str, MS_U16 *pu16Array)
         *(pu16Array++)=u16Number;
         str+=2;
     }
-    UBOOT_INFO("\n");
     return 0;
 }
 
@@ -5872,7 +5871,7 @@ int Load_LDMPara_ToFlash(U32 u32DbtableOffset)
                 UBOOT_INFO("set boot env ldm_led_device_name to be APE5030.\n");
                 setenv("ldm_led_device_name", "ape5030");
 
-                snprintf(strApe5030_ch_map, sizeof(strApe5030_ch_map), "%x:%x:%x:%x:%x:%x:%x:%x:%x:%x:%x:%x",
+                snprintf(strApe5030_ch_map, sizeof(strApe5030_ch_map), "%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
                         device_info.u16LED_CMD_CUR_ON_1[0], device_info.u16LED_CMD_CUR_ON_1[1], device_info.u16LED_CMD_CUR_ON_1[2], device_info.u16LED_CMD_CUR_ON_1[3],
                         device_info.u16LED_CMD_CUR_ON_1[4], device_info.u16LED_CMD_CUR_ON_1[5], \
                         device_info.u16LED_CMD_CUR_ON_2[0], device_info.u16LED_CMD_CUR_ON_2[1], \
