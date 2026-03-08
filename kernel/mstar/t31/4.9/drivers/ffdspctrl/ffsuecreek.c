@@ -316,8 +316,8 @@ int ffdsp_suecreek_resume(struct platform_device *pdev)
 	struct ff_suecreek_dev *dev = platform_get_drvdata(pdev);
 
     if (strstr(idme_get_config_name(), "brandenburg") != NULL && \
-            strstr(idme_get_config_name(), "abc123") == NULL) {
-        /* GPIO8_PM would conflict between abc123, reconfig to output mode and lo for BBURG */
+            strstr(idme_get_config_name(), "kayla") == NULL) {
+        /* GPIO8_PM would conflict between kayla, reconfig to output mode and lo for BBURG */
         pr_info("[%s] Re-config GPIO8_PM to output mode and lo for BBURG\n", __func__);
         REG_ADDR(PAD_GPIO8_PM) = (REG_ADDR(PAD_GPIO8_PM) & ~(BIT(1)|BIT(0))) | GPIO_OUT_LOW;
     }

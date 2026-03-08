@@ -1229,10 +1229,10 @@
 		irblaster-inverse = <0>;
 		irblaster-ctrl = <167>;
                 irblaster-enable_anna = <1>;
-                irblaster-enable_abc123eu = <1>;
+                irblaster-enable_kaylaeu = <1>;
                 irblaster-enable_juliana = <0>;
 		irblaster-pwm_anna = <2>;
-                irblaster-pwm_abc123eu = <2>;
+                irblaster-pwm_kaylaeu = <2>;
                 irblaster-pwm_juliana = <1>;
 	};
 
@@ -1697,8 +1697,8 @@
         compatible = "mediatek,hifi4dsp-wdt";
 		dsp-wdt-gpio = <7>;
 		dsp-wdt-inverse = <0>;
-		dsp-wdt-inverse_abc123 = <1>;
-		dsp-wdt-inverse_abc123eu = <1>;
+		dsp-wdt-inverse_kayla = <1>;
+		dsp-wdt-inverse_kaylaeu = <1>;
     };
 
 	dsp_mt8570 {
@@ -1707,8 +1707,8 @@
 		reset-gpio = <42>;
 		wdt-irq-gpio = <7>;
 		dsp-wdt-inverse = <0>;
-		dsp-wdt-inverse_abc123 = <1>;
-		dsp-wdt-inverse_abc123eu = <1>;
+		dsp-wdt-inverse_kayla = <1>;
+		dsp-wdt-inverse_kaylaeu = <1>;
 	};
 
 	adf_dsp {

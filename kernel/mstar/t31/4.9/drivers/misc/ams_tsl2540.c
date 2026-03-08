@@ -113,8 +113,8 @@ static int tsl2540_check_device_id(struct tsl2540_chip *chip)
 
     strncpy (config_name, idme_get_config_name(), 20);
 
-    if ( ( 0 == strcasecmp(config_name, "abc123_hvt")) ||
-         ( 0 == strcasecmp(config_name, "abc123eu_ffhvt"))) {
+    if ( ( 0 == strcasecmp(config_name, "kayla_hvt")) ||
+         ( 0 == strcasecmp(config_name, "kaylaeu_ffhvt"))) {
 	  dev_info(dev, "%s: HVT device detected %s.\n", __func__, config_name);
 	  return 0; //HVT
     }
