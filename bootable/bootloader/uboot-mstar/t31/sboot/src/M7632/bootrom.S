@@ -1481,10 +1481,10 @@ amzn_identifier:
     // sboot version <LO, HI>
     .byte 0x24, 0x00
     .ascii "BRAN"
-#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_SKIPPER)
+#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ABC)
     // sboot version <LO, HI>
     .byte 0x07, 0x00
-    .ascii "SKIP"
+    .ascii "ABCD"
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ANNA)
     // sboot version <LO, HI>
     .byte 0x19, 0x00
@@ -1493,10 +1493,10 @@ amzn_identifier:
     // sboot version <LO, HI>
     .byte 0x10, 0x00
     .ascii "HAIL"
-#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_TEDDY)
+#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ABCD)
     // sboot version <LO, HI>
     .byte 0x08, 0x00
-    .ascii "TEDDY"
+    .ascii "ABCD"
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_JULIANA)
     // sboot version <LO, HI>
     .byte 0x0f, 0x00

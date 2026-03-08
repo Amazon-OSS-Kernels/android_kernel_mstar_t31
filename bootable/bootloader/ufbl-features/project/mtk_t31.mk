@@ -19,17 +19,17 @@ UFBL_PLAT_MTK_T31 := yes
 export UFBL_PLAT_MTK_T31
 DEFINES += -DUFBL_PLAT_MTK_T31
 
-# for specific changes per project; skipper reuses brandenburg
+# for specific changes per project; ABC reuses brandenburg
 ifeq ($(TARGET_PRODUCT), duckie)
 DEFINES += -DUFBL_PROJ_DUCKIE
 else ifeq ($(TARGET_PRODUCT), brandenburg)
 DEFINES += -DUFBL_PROJ_BRANDENBURG
-else ifeq ($(TARGET_PRODUCT), skipper)
+else ifeq ($(TARGET_PRODUCT), ABC)
 DEFINES += -DUFBL_PROJ_BRANDENBURG
 else ifeq ($(TARGET_PRODUCT), anna)
 DEFINES += -DUFBL_PROJ_ANNA
-else ifeq ($(TARGET_PRODUCT), teddy)
-DEFINES += -DUFBL_PROJ_TEDDY
+else ifeq ($(TARGET_PRODUCT), ABC)
+DEFINES += -DUFBL_PROJ_ABC
 else ifeq ($(TARGET_PRODUCT), hailey)
 DEFINES += -DUFBL_PROJ_HAILEY
 else ifeq ($(TARGET_PRODUCT), juliana)
