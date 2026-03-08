@@ -1918,11 +1918,9 @@ priv_get_ndis(IN struct net_device *prNetDev, IN NDIS_TRANSPORT_STRUCT * prNdisR
 * \brief The routine handles ATE set operation.
 *
 * \param[in] pDev Net device requested.
-* \param[in] ndisReq Ndis request OID information copy from user.
-* \param[out] outputLen_p If the call is successful, returns the number of
-*                         bytes written into the query buffer. If the
-*                         call failed due to invalid length of the query
-*                         buffer, returns the amount of storage needed..
+* \param[in] prIwReqInfo pointer to iwreq structure.
+* \param[in] prIwReqData The ioctl data structure, use the field of sub-command.
+* \param[in] pcExtra the buffer with input value.
 *
 * \retval 0 On success.
 * \retval -EOPNOTSUPP If cmd is not supported.
@@ -14097,6 +14095,69 @@ static int priv_driver_rst_chip_rst_cnt(IN struct net_device *prNetDev,
 }
 #endif
 
+static int priv_driver_get_1xtx_status(IN struct net_device *prNetDev,
+					IN char *pcCommand, IN int i4TotalLen)
+{
+	P_GLUE_INFO_T prGlueInfo = NULL;
+	P_ADAPTER_T   prAdapter  = NULL;
+
+	int32_t  i4BytesWritten = 0;
+
+	DBGLOG(REQ, LOUD, "command is %s\n", pcCommand);
+
+	prGlueInfo = *((P_GLUE_INFO_T *) netdev_priv(prNetDev));
+	if (!prGlueInfo)
+		return -EFAULT;
+
+	prAdapter = prGlueInfo->prAdapter;
+	if (!prAdapter || !prAdapter->prAisBssInfo)
+		return -EFAULT;
+
+	LOGBUF(pcCommand, i4TotalLen, i4BytesWritten,
+	       "r1xTxDoneStatus is %d\n", prAdapter->r1xTxDoneStatus);
+
+	return i4BytesWritten;
+}
+
+static int priv_driver_test_1xtx_status(IN struct net_device *prNetDev,
+					IN char *pcCommand, IN int i4TotalLen)
+{
+	P_GLUE_INFO_T prGlueInfo = NULL;
+	INT_32 i4BytesWritten = 0;
+	INT_32 i4Argc = 0;
+	PCHAR apcArgv[WLAN_CFG_ARGV_MAX] = { 0 };
+	INT_32 i4Ret = 0;
+	UINT_8 ucTest1xTxStatus;
+	P_ADAPTER_T   prAdapter  = NULL;
+
+	DBGLOG(REQ, LOUD, "command is %s\n", pcCommand);
+	wlanCfgParseArgument(pcCommand, &i4Argc, apcArgv);
+
+	DBGLOG(REQ, ERROR, "i4Argc is %d\n", i4Argc);
+	if (i4Argc != 2) {
+		i4BytesWritten += scnprintf(pcCommand + i4BytesWritten,
+			i4TotalLen - i4BytesWritten,
+			"\nformat:test_1xtx_status [0|1]");
+		return i4BytesWritten;
+	}
+
+	i4Ret = kalkStrtou8(apcArgv[1], 0, &ucTest1xTxStatus);
+	if (i4Ret)
+		DBGLOG(REQ, ERROR, "parse test_1xtx_status error i4Ret=%d\n", i4Ret);
+
+	prGlueInfo = *((P_GLUE_INFO_T *) netdev_priv(prNetDev));
+	if (!prGlueInfo)
+		return -EFAULT;
+
+	prAdapter = prGlueInfo->prAdapter;
+	if (!prAdapter || !prAdapter->prAisBssInfo)
+		return -EFAULT;
+
+	prAdapter->fgIsTest1xTx = ucTest1xTxStatus;
+	DBGLOG(REQ, STATE, "set fgIsTest1xTx %d\n", prAdapter->fgIsTest1xTx);
+
+	return i4BytesWritten;
+}
 
 INT_32 priv_driver_cmds(IN struct net_device *prNetDev, IN PCHAR pcCommand, IN INT_32 i4TotalLen)
 {
@@ -14547,7 +14608,14 @@ INT_32 priv_driver_cmds(IN struct net_device *prNetDev, IN PCHAR pcCommand, IN I
 			i4BytesWritten = priv_driver_rst_chip_rst_cnt(
 				prNetDev, pcCommand, i4TotalLen);
 #endif
-		} else
+		}
+		else if (strnicmp(pcCommand, CMD_GET_1XTX_STATUS, strlen(CMD_GET_1XTX_STATUS)) == 0) {
+			i4BytesWritten = priv_driver_get_1xtx_status(prNetDev, pcCommand, i4TotalLen);
+		}
+		else if (strnicmp(pcCommand, CMD_TEST_1XTX_STATUS, strlen(CMD_TEST_1XTX_STATUS)) == 0) {
+			i4BytesWritten = priv_driver_test_1xtx_status(prNetDev, pcCommand, i4TotalLen);
+		}
+		else
 			i4BytesWritten = priv_cmd_not_support(prNetDev, pcCommand, i4TotalLen);
 
 	if (i4BytesWritten >= 0) {
@@ -14672,7 +14740,7 @@ int android_private_support_driver_cmd(IN struct net_device *prNetDev,
 	if (copy_from_user(&priv_cmd, prReq->ifr_data, sizeof(priv_cmd)))
 		return -EFAULT;
 
-	if (priv_cmd.total_len <= 0)
+	if (priv_cmd.total_len <= 0 || priv_cmd.total_len > PRIV_CMD_SIZE)
 		return -EINVAL;
 
 	command = kzalloc(priv_cmd.total_len, GFP_KERNEL);
