@@ -99,15 +99,15 @@ config HID_FTV_BLEREMOTE
 	---help---
 	This custom driver handle vendor specific commands
 
-config HID_AMAZON_ASPEN
-	tristate "Amazon Aspen BT Keyboard / Trackpad"
+config HID_AMAZON_acc123
+	tristate "Amazon acc123 BT Keyboard / Trackpad"
 	depends on HID
 	default HID
 	---help---
-	Support for Amazon Aspen KB/TrackPad
+	Support for Amazon acc123 KB/TrackPad
 	This custom driver handle Vendor specific events.
 
-	Say Y here if you want to enable support for Amazon Aspen KB/TrackPad
+	Say Y here if you want to enable support for Amazon acc123 KB/TrackPad
 
 config HID_LAB126
 	tristate "Lab126 keyboard"
