@@ -159,7 +159,6 @@ static int mma_dma_buf_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma)
 		struct mma_buf_handle *handle = dmabuf->priv;
 		if(handle != NULL) {
 			MMA_DEBUG("map user tag=%s,addr=0x%llx ,size=0x%x\n", handle->buf_tag,handle->addr, handle->length);
-			handle->map_pid = current->pid;
 			return dma_buf_mmap(handle->db_ion, vma, vma->vm_pgoff);
 		}
 	}
@@ -486,28 +485,6 @@ static struct dma_buf_ops mma_dma_buf_ops = {
 	.vunmap = mma_dma_buf_vunmap,
 };
 
-static inline void _show_info_by_buftag(const char *buf_tag)
-{
-	struct mma_buf_handle *handle;
-
-	if (!buf_tag)
-		return;
-
-	// do not print mali_gop_dma
-	if (!strncmp(buf_tag, "mali_gop_dma", MAX_NAME_SIZE))
-		return;
-
-	mutex_lock(&mma_dev.buf_lock);
-	list_for_each_entry(handle, &mma_dev.buf_list_head, buf_list_node) {
-		if (!strncmp(handle->buf_tag, buf_tag, MAX_NAME_SIZE))
-			pr_crit("Remain buf_tag: %s, addr: 0x%llx, size: 0x%zx, pid:%d, comm:%s, file_count: %ld\n",
-					buf_tag, handle->addr, handle->length,
-					handle->pid, handle->comm, file_count(handle->dmabuf->file));
-
-	}
-	mutex_unlock(&mma_dev.buf_lock);
-}
-
 static int mma_maxima_check(const char* buf_tag, u32 size, u64 max)
 {
 	struct mma_buf_handle* handle;
@@ -520,9 +497,7 @@ static int mma_maxima_check(const char* buf_tag, u32 size, u64 max)
 	mutex_unlock(&mma_dev.buf_lock);
 	total += size;
 	if(total > max){
-		pr_emerg("%s: buf_tag [%s] total=0x%lx > max=0x%lx\n", __func__,
-							buf_tag, (unsigned long)total, (unsigned long)max);
-		_show_info_by_buftag(buf_tag);
+		printk(KERN_ERR"%s  %d, Failed! buf_tag=%s,total=0x%llx > max=0x%llx\n",__FUNCTION__, __LINE__,buf_tag,total,max);
 		return -1;
 	}else
 		return 0;
@@ -622,10 +597,7 @@ struct mma_buf_handle* __mma_create_buf_handle(u32 length, const char* buf_tag)
 
 	handle->dmabuf_fd = fd;
 	handle->mma_dev = &mma_dev;
-	handle->pid = current->pid;
-	handle->tgid = current->tgid;
-	scnprintf(handle->comm, sizeof(handle->comm),
-						"%s", current->comm);
+    handle->tpid = current->tgid;
     handle->global_name = -1;
     handle->kvaddr = NULL;
     handle->serial = serial_num++;

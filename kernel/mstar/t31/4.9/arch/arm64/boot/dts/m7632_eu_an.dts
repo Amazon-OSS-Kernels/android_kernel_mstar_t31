@@ -1665,7 +1665,7 @@
 	mt8570_ipi {
 		compatible = "mediatek,mt8570_ipi";
 		status = "okay";
-		ipi_irq_gpio = <10>;
+        interrupts = <33>; /*E_IRQ_PM_SLEEP*/
 	};
 
 	hifi4dsp-load {
@@ -1691,10 +1691,7 @@
 
     hifi4dsp_wdt {
         compatible = "mediatek,hifi4dsp-wdt";
-		dsp-wdt-gpio = <7>;
-		dsp-wdt-inverse = <0>;
-		dsp-wdt-inverse_abc123 = <1>;
-		dsp-wdt-inverse_abc123eu = <1>;
+		interrupts = <33>;
     };
 
 };
