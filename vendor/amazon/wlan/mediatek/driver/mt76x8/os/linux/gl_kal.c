@@ -1077,11 +1077,13 @@ kalIndicateStatusAndComplete(IN P_GLUE_INFO_T prGlueInfo, IN WLAN_STATUS eStatus
 							  ieee80211_channel_to_frequency
 							  (ucChannelNum, KAL_BAND_5GHZ));
 			}
-
-			/* ensure BSS exists */
+#if KERNEL_VERSION(4, 1, 0) <= CFG80211_VERSION_CODE
+			bss = cfg80211_get_bss(priv_to_wiphy(prGlueInfo), prChannel, arBssid,
+					       ssid.aucSsid, ssid.u4SsidLen, IEEE80211_BSS_TYPE_ESS, IEEE80211_PRIVACY_ANY);
+#else
 			bss = cfg80211_get_bss(priv_to_wiphy(prGlueInfo), prChannel, arBssid,
 					       ssid.aucSsid, ssid.u4SsidLen, WLAN_CAPABILITY_ESS, WLAN_CAPABILITY_ESS);
-
+#endif
 			if (bss == NULL) {
 #if (BUILD_DBG_MSG == 1)
 				DBGLOG(INIT, EVENT, "Cannot get BSS from cfg80211 [ssid:%s]\n", ssid.aucSsid);
@@ -1097,7 +1099,7 @@ kalIndicateStatusAndComplete(IN P_GLUE_INFO_T prGlueInfo, IN WLAN_STATUS eStatus
 								CFG80211_BSS_FTYPE_PRESP,
 								arBssid,
 								0,	/* TSF */
-								WLAN_CAPABILITY_ESS,
+								prBssDesc->u2CapInfo,
 								prBssDesc->u2BeaconInterval,	/* beacon interval */
 								prBssDesc->aucIEBuf,	/* IE */
 								prBssDesc->u2IELength,	/* IE Length */
@@ -1106,7 +1108,7 @@ kalIndicateStatusAndComplete(IN P_GLUE_INFO_T prGlueInfo, IN WLAN_STATUS eStatus
 #else
 					bss = cfg80211_inform_bss(priv_to_wiphy(prGlueInfo), prChannel,
 								  arBssid, 0,	/* TSF */
-								  WLAN_CAPABILITY_ESS,
+								  prBssDesc->u2CapInfo,
 								  prBssDesc->u2BeaconInterval,	/* beacon interval */
 								  prBssDesc->aucIEBuf,	/* IE */
 								  prBssDesc->u2IELength,	/* IE Length */
@@ -4859,7 +4861,7 @@ BOOLEAN kalSetSdioTestPattern(IN P_GLUE_INFO_T prGlueInfo, IN BOOLEAN fgEn, IN B
 #define PROC_MET_PROF_PORT                 "met_port"
 
 struct proc_dir_entry *pMetProcDir;
-void *pMetGlobalData;
+void *pMetGlobalData = NULL;
 
 #endif
 /*----------------------------------------------------------------------------*/
@@ -5439,6 +5441,12 @@ int kalMetRemoveProcfs(IN P_GLUE_INFO_T prGlueInfo)
 		DBGLOG(INIT, WARN, "remove proc fs fail: proc_net == NULL\n");
 		return -ENOENT;
 	}
+
+	if (pMetGlobalData == NULL) {
+		DBGLOG(INIT, WARN, "Skip MET remove Procfs due to init was not done\n");
+		return 0;
+	}
+
 	remove_proc_entry(PROC_MET_PROF_CTRL, pMetProcDir);
 	remove_proc_entry(PROC_MET_PROF_PORT, pMetProcDir);
 	/* remove root directory (proc/net/wlan0) */
