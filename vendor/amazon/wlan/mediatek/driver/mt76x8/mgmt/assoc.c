@@ -93,6 +93,10 @@ APPEND_VAR_IE_ENTRY_T txAssocReqIETable[] = {
 #endif
 	{(ELEM_HDR_LEN + ELEM_MAX_LEN_HT_CAP), NULL, rlmReqGenerateHtCapIE}
 	,			/* 45 */
+#if CFG_SUPPORT_802_11K
+	{(ELEM_HDR_LEN + 5), NULL, rlmReqGenerateRRMEnabledCapIE}
+	,			/* 70 */
+#endif
 #if CFG_SUPPORT_WPS2
 	{(ELEM_HDR_LEN + ELEM_MAX_LEN_WSC), NULL, rsnGenerateWSCIE}
 	,			/* 221 */
@@ -221,7 +225,9 @@ UINT_16 assocBuildCapabilityInfo(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prS
 	/* Set up our requested capabilities. */
 	u2CapInfo = CAP_INFO_ESS;
 	u2CapInfo |= CAP_CF_STA_NOT_POLLABLE;
-
+#if CFG_SUPPORT_802_11K
+	u2CapInfo |= CAP_INFO_RADIO_MEASUREMENT;
+#endif
 	if (prStaRec->u2CapInfo & CAP_INFO_PRIVACY)
 		u2CapInfo |= CAP_INFO_PRIVACY;
 
@@ -1295,7 +1301,7 @@ WLAN_STATUS assocProcessRxAssocReqFrame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T 
 	P_BSS_INFO_T prBssInfo;
 	P_IE_SSID_T prIeSsid = (P_IE_SSID_T) NULL;
 	P_RSN_INFO_ELEM_T prIeRsn = (P_RSN_INFO_ELEM_T) NULL;
-	P_IE_SUPPORTED_RATE_T prIeSupportedRate = (P_IE_SUPPORTED_RATE_T) NULL;
+	P_IE_SUPPORTED_RATE_IOT_T prIeSupportedRate = (P_IE_SUPPORTED_RATE_IOT_T) NULL;
 	P_IE_EXT_SUPPORTED_RATE_T prIeExtSupportedRate = (P_IE_EXT_SUPPORTED_RATE_T) NULL;
 	PUINT_8 pucIE, pucIEStart;
 	UINT_16 u2IELength;
@@ -1389,7 +1395,7 @@ WLAN_STATUS assocProcessRxAssocReqFrame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T 
 
 		case ELEM_ID_SUP_RATES:
 			if ((!prIeSupportedRate) && (IE_LEN(pucIE) <= RATE_NUM_SW))
-				prIeSupportedRate = SUP_RATES_IE(pucIE);
+				prIeSupportedRate = SUP_RATES_IOT_IE(pucIE);
 
 			break;
 		case ELEM_ID_PWR_CAP:
