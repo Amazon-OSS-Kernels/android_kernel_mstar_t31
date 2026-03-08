@@ -1148,7 +1148,6 @@ int do_frc_bringup(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
     if(loadFRC == false)
     {
 #if defined(AMZN_FTVE_FRC_SIGNING_ENABLED)
-        if (is_lockdown()) {
             memset(cmd, 0, sizeof(cmd));
             FRC_Addr = malloc(FRC_SIG_START_SIZE * sizeof(unsigned char));
             snprintf(cmd, sizeof(cmd)-1, "mmc read.p 0x%08lX  frc 0x100000", (unsigned long)(FRC_Addr));
@@ -1167,7 +1166,6 @@ int do_frc_bringup(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
             }
             free(FRC_Addr);
             UBOOT_DEBUG("Verify FRC PASS\n");
-        }
 #endif
 
         memset(cmd, 0, sizeof(cmd));
