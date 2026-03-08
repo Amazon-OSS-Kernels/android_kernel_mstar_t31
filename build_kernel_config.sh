@@ -2,7 +2,7 @@
 #
 #  build_kernel_config.sh
 #
-#  Copyright (c) 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#  Copyright (c) 2021-2023 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 #
 ################################################################################
 
