@@ -27,13 +27,6 @@
 #include <linux/gpio.h>
 #include "mdrv_mstypes.h"
 #include "hifi4dsp_load/hifi4dsp_load.h"
-#include "audio_messenger_ipi.h"
-
-/*
- * 16: audio ipi header size in bytes
- * 72: payload size in bytes
- */
-#define IPI_MSG_DEFAULT_COPY_SIZE (IPI_MSG_HEADER_SIZE + 16 + 72)
 
 #ifdef CONFIG_MTK_HIFI4DSP_WDT_RECOVER_SUPPORT
 #include "hifi4dsp_wdt/hifi4dsp_wdt.h"
@@ -47,6 +40,7 @@ extern int adsp_ipi_get_wdt_status(struct notifier_block *this,
  * =============================================================================
  */
 #define PRINT_THRESHOLD 10000
+
 /*
  * =============================================================================
  *                     struct def
@@ -91,7 +85,6 @@ enum adsp_ipi_id adsp_ipi_owner[ADSP_CORE_TOTAL];
 unsigned int adsp_ipi_id_record_count;
 unsigned int adsp_to_ap_ipi_count;
 unsigned int ap_to_adsp_ipi_count;
-unsigned int irq_gpio_num;
 
 #ifdef CONFIG_MTK_HIFI4DSP_WDT_RECOVER_SUPPORT
 unsigned int is_from_wdt;
@@ -130,8 +123,6 @@ void mt8570_ipi_handler(enum adsp_core_id core_id)
 	unsigned int flag = 0;
 #endif
 	enum adsp_ipi_id adsp_ipi_id;
-	int copy_size;
-	int remain_size;
 
 	pr_debug("[ADSP] A ipi handler, id=%d\n", core_id);
 
@@ -141,26 +132,9 @@ void mt8570_ipi_handler(enum adsp_core_id core_id)
 		msleep(20);
 	}
 
-	/* copy default size
-	 * it's the most frequency ipi message from adsp during recording.
-	 */
-	copy_size = IPI_MSG_DEFAULT_COPY_SIZE;
-	memcpy_from_adsp_no_clr(core_id, adsp_rcv_obj[core_id],
-				adsp_info[core_id].adsp_rcv_obj_addr,
-				copy_size);
-
-	/* copy remaining size */
-	remain_size = adsp_rcv_obj[core_id]->len + IPI_MSG_HEADER_SIZE - copy_size;
-	if (adsp_rcv_obj[core_id]->len > 0 && remain_size > 0)
-		memcpy_from_adsp_no_clr(core_id,
-					&adsp_rcv_obj[core_id]->share_buf[copy_size - IPI_MSG_HEADER_SIZE],
-					(adsp_info[core_id].adsp_rcv_obj_addr + copy_size),
-					remain_size);
-	else
-		pr_debug("[ADSP] A ipi handler, adsp_rcv_obj[core_id]->len: %d, remain_size: %d\n",
-			 adsp_rcv_obj[core_id]->len, remain_size);
-
-	clr_adsp_to_host_status(core_id, IPC_MESSAGE_READY);
+	memcpy_from_adsp(core_id, adsp_rcv_obj[core_id],
+		adsp_info[core_id].adsp_rcv_obj_addr,
+		sizeof(struct adsp_share_obj));
 
 	adsp_ipi_id = adsp_rcv_obj[core_id]->id;
 	/*pr_debug("adsp A ipi handler %d\n", adsp_ipi_id);*/
@@ -609,36 +583,37 @@ static int __init mt8570_ipi_probe(struct platform_device *pdev)
 	}
 
 #ifdef CONFIG_OF
+	int irq_num;
         int err = -ENODEV;
 	pr_notice("%s", __func__);
 	//irq_num = platform_get_irq(pdev, 0);
-#if defined(CONFIG_IDME)
-	char property_name[DTS_STRING_LENGTH];
-
-	snprintf((char *)property_name, DTS_STRING_LENGTH, "%s%s", "ipi_irq_gpio_", idme_get_config_name());
-	if (!of_property_read_u32(pdev->dev.of_node, property_name, &irq_gpio_num)) {
-		pr_info("%s:  %s is %d \n", __func__, property_name, irq_gpio_num);
-	} else
-#endif
-	if (!of_property_read_u32(pdev->dev.of_node, "ipi_irq_gpio", &irq_gpio_num)) {
-		pr_info("%s: ipi_irq_gpio is %d \n",  __func__, irq_gpio_num);
-	} else {
-		pr_err("%s: ipi_irq_gpio is not defined \n", __func__);
-		irq_gpio_num = 10;
-	}
-#endif
-	mt8570_ipi_platform_init(pdev);
-
-	mt8570_ipi_init();
-
+	err = of_property_read_u32(pdev->dev.of_node, "interrupts",&irq_num);
+        if (err){
+            dev_err(&pdev->dev, "could not get resource\n");
+            pr_notice("Fail to get audio ipi irq number from device tree\n");
+            return -EINVAL;
+        }
 	/* IRQF_TRIGGER_RISING/IRQF_TRIGGER_FALLING
 	 * IRQF_TRIGGER_HIGH/IRQF_TRIGGER_LOW
 	 */
-	err = request_gpio_irq(irq_gpio_num, mt8570_core_0_irq_handler, IRQF_TRIGGER_RISING, &pdev->dev);
-	if (err != 0) {
-		pr_err("%s: failed to request irq %d(err:%d)\n", __func__, irq_gpio_num, err);
-		return err;
+	if (request_irq(irq_num, mt8570_core_0_irq_handler,
+		IRQF_TRIGGER_RISING|IRQF_SHARED, "AUDIO IPI", &pdev->dev) != 0) {
+		pr_notice("Fail to request audio ipi irq interrupt!\n");
+		return -1;
 	}
+
+    //set as gpio input mode PAD_PM_GPIO_5
+    REG_ADDR((0x000F<<9) + (0x05<<2)) &= ~(BIT(1));
+    REG_ADDR((0x000F<<9) + (0x05<<2)) &= ~(BIT(2));
+    REG_ADDR((0x000F<<9) + (0x05<<2)) |= (BIT(0));
+    REG_ADDR((0x000F<<9) + (0x05<<2)) |= BIT(6);
+    //Enable interrupt mask
+    REG_ADDR((0x000F<<9) + (0x05<<2)) &= ~(BIT(4));
+#endif
+
+	mt8570_ipi_platform_init(pdev);
+
+	mt8570_ipi_init();
 
 #ifdef CONFIG_MTK_HIFI4DSP_WDT_RECOVER_SUPPORT
 	register_adsp_wdt_notifier(&get_wdt_status);
@@ -677,19 +652,22 @@ unsigned int is_from_suspend;
 static int audio_ipi_pm_resume(struct device *device)
 {
 	pr_notice("%s is resume!\n",__func__);
-	int ret;
-	ret = request_gpio_irq(irq_gpio_num, mt8570_core_0_irq_handler, IRQF_TRIGGER_RISING, device);
-	if (ret != 0) {
-		pr_err(" %s: failed to request irq %d(err:%d)\n", __func__, irq_gpio_num, ret);
-	}
-	mt8570_ipi_platform_resume();
+        //set as gpio input mode PAD_PM_GPIO_5
+	REG_ADDR((0x000F<<9) + (0x05<<2)) &= ~(BIT(1));
+	REG_ADDR((0x000F<<9) + (0x05<<2)) &= ~(BIT(2));
+        REG_ADDR((0x000F<<9) + (0x05<<2)) &= ~(BIT(3));
+        REG_ADDR((0x000F<<9) + (0x05<<2)) |= (BIT(0));
+        REG_ADDR((0x000F<<9) + (0x05<<2)) |= BIT(6);
+        //Enable interrupt mask
+        REG_ADDR((0x000F<<9) + (0x05<<2)) &= ~(BIT(4));
+
+        mt8570_ipi_platform_resume();
 	return 0;
 }
 
 static int audio_ipi_pm_suspend(struct device *device)
 {
 	pr_notice("%s is suspend, set is_from_suspend to 1!\n",__func__);
-	free_gpio_irq(irq_gpio_num, device);
 	is_from_suspend = 1;
 	return 0;
 }
