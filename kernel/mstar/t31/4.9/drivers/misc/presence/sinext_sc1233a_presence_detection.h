@@ -1,17 +1,3 @@
-/*
- * Copyright (c) 2022 Amazon.com, Inc. or its affiliates.  All rights reserved.
- *
- * PROPRIETARY/CONFIDENTIAL.  USE IS SUBJECT TO LICENSE TERMS.
- *
- * sinext_sc1233a_presence_detection.h: Presence detection algorithm implementation
- *
- * Owners: @jodong,@yenvivek
- *
- * MAJOR_VERSION:1
- * MINOR_VERSION:0
- *
- */
-
 #ifndef PRESENCE_DETECTION_H
 #define PRESENCE_DETECTION_H
 
