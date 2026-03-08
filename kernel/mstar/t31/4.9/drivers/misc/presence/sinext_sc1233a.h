@@ -1,8 +1,3 @@
-/*
- * Copyright (c) 2022 Amazon.com, Inc. or its affiliates.  All rights reserved.
- *
- */
-
 #ifndef __SINEXT_SC1233A_H
 #define __SINEXT_SC1233A_H
 
@@ -106,7 +101,5 @@ static const int lookup_table[] =
 	1584893192,//92
 	1995262314,//93*/
 };
-
-#define LOOKUP_TABLE_SIZE sizeof(lookup_table)/sizeof(lookup_table[0])
 
 #endif /* __SINEXT_SC1233A_H */

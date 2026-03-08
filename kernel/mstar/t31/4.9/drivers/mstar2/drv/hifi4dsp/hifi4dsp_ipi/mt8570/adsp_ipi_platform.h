@@ -43,12 +43,10 @@
 #define ADSP_COMMON_INFO_MAGIC 0x1D901D90
 
 void memcpy_from_adsp(enum adsp_core_id core_id, void *trg, u32 src, int size);
-void memcpy_from_adsp_no_clr(enum adsp_core_id core_id, void *trg, u32 src, int size);
 void memcpy_to_adsp(enum adsp_core_id core_id, u32 trg, void *src, int size);
 unsigned int is_adsp_ready(enum adsp_core_id core_id);
 unsigned int is_ipi_busy(enum adsp_core_id core_id);
 u32 get_adsp_to_host_status(enum adsp_core_id core_id);
-void clr_adsp_to_host_status(enum adsp_core_id core_id, u32 status);
 irqreturn_t mt8570_core_0_irq_handler(int irq, void *dev_id);
 int mt8570_ipi_platform_init(struct platform_device *pdev);
 

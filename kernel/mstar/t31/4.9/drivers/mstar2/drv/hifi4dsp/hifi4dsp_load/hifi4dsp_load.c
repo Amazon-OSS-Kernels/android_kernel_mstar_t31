@@ -35,7 +35,6 @@
 #include <linux/platform_device.h>
 #include <linux/uaccess.h>
 #include <hifi4dsp_load/hifi4dsp_load.h>
-#include <hifi4dsp_wdt/hifi4dsp_wdt.h>
 #include "mdrv_mstypes.h"
 #include <adsp_ipi.h>
 
@@ -52,6 +51,10 @@ static int adfDbgReadFunc(uintptr_t dest, int size);
 
 #define DSP_LOAD_UNIT_TEST	0
 
+#if defined(CONFIG_IDME)
+extern char *idme_get_config_name(void);
+#define DTS_STRING_LENGTH 64
+#endif
 /*
  * hifi4dsp registers and bits
  */
@@ -317,8 +320,8 @@ void hifi4dsp_send_WTD_WHOLE(void)
 	kobject_uevent_env(&hifi4dsp_load->dev->kobj, KOBJ_CHANGE, envp);
 	return 0;
 }
-extern void set_DSP_DRV(void);
-void set_DSP_DRV(void)
+
+static void set_DSP_DRV(void)
 {
 	/* Configure DSP Driving */
 	/* 0 :3 mA */
@@ -364,18 +367,19 @@ static ssize_t hifi4dsp_debug_cli_write(struct file *file,
 
 	if (strncmp(buf, "reload", strlen("reload")) == 0) {
 		pr_info("SW triggered WDT. Reloading FW!!");
-		mtk_dsp_wdt_disable();
 		spi_config_MSB();
 		set_DSP_DRV();
 		hifi4dsp_rst();
 		hifi4dsp_send_WTD_WHOLE();
 		return len;
 	}
+
 	ret = adsp_ipi_send(ADSP_IPI_CLI, buf, strlen(buf), 0, 0);
 	if (ret) {
 		pr_info("send cli cmd failed\n");
 		return -EINVAL;
 	}
+
 	return len;
 }
 
@@ -756,22 +760,11 @@ static void fixup_hifi4dsp_early_setting(void)
 #ifdef CONFIG_AMAZON_DSP_FRAMEWORK
 static int adfDbgReadFunc(uintptr_t dest, int size)
 {
-	u32 log_buf_start;
-	int ret;
+    u32 log_buf_start;
 
-	ret = spi_read_register(GPR_LOG_BUF_ADDR, &log_buf_start, SPI_SPEED_LOW);
-	if (ret != 0) {
-		pr_err("%s failed to read over SPI\n",__func__);
-		return -1;
-	}
-
-	ret = dsp_spi_read_ex(log_buf_start, (void*)dest, size, SPI_SPEED_LOW);
-	if (ret != 0) {
-		pr_err("%s failed to read DSP log over SPI\n",__func__);
-		return -1;
-	}
-
-	return size;
+    spi_read_register(GPR_LOG_BUF_ADDR, &log_buf_start, SPI_SPEED_LOW);
+    dsp_spi_read_ex(log_buf_start, (void*)dest, size, SPI_SPEED_LOW);
+    return size;
 }
 
 static int adfDbgCheckRunFunc(void)
@@ -803,8 +796,6 @@ static void set_hifi4dsp_run_status(void)
 	adfDebug_init((void *)adfDbgCheckRunFunc, (void *)adfDbgReadFunc, DSP_LOG_DUMP_PERIOD,
 				  log_buf_size);
 #endif
-    void mtk_dsp_wdt_enable(void);
-    mtk_dsp_wdt_enable();
 }
 
 #ifdef CONFIG_MTK_HIFI4DSP_WDT_RECOVER_SUPPORT
@@ -930,9 +921,8 @@ static int hifi4dsp_load_probe(struct platform_device *pdev)
 	int ret = 0;
 	u32 prop;
 	struct device_node *np;
-#if defined(CONFIG_IDME)
+	char project_name[DTS_STRING_LENGTH];
 	char property_name[DTS_STRING_LENGTH];
-#endif
 #if DSP_LOAD_UNIT_TEST
 	static struct task_struct *dsp_task;
 #endif
@@ -955,17 +945,13 @@ static int hifi4dsp_load_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-#if defined(CONFIG_IDME)
-	snprintf((char *)property_name, DTS_STRING_LENGTH, "%s%s", "hifi4dsp-reset-gpio_", idme_get_config_name());
-
+	snprintf((char *)property_name, DTS_STRING_LENGTH, "%s%s", "hifi4dsp-reset-gpio_", project_name);
 	if (!of_property_read_u32(np, property_name, &prop)) {
 		hifi4dsp_load->hifi4dsp_reset_gpio = prop;
-		pr_info("%s:  %s is %d \n", __func__, property_name, prop);
-	} else
-#endif
-	if (!of_property_read_u32(np, "hifi4dsp-reset-gpio", &prop)) {
+		pr_info("%s:  %s is %d \n", property_name, prop, __func__);
+	} else if (!of_property_read_u32(np, "hifi4dsp-reset-gpio", &prop)) {
 		hifi4dsp_load->hifi4dsp_reset_gpio = prop;
-		pr_info("%s: hifi4dsp_reset_gpio is %d \n", __func__, prop);
+		pr_info("%s: hifi4dsp_reset_gpio is %d \n", prop, __func__);
 	} else {
 		pr_err("%s: hifi4dsp_reset_gpio is not defined \n", __func__);
 		hifi4dsp_load->hifi4dsp_reset_gpio = 42;
@@ -1002,7 +988,7 @@ static int hifi4dsp_load_probe(struct platform_device *pdev)
 	return ret;
 }
 
-void hifi4dsp_stop_dsp(void)
+static void hifi4dsp_stop_dsp(void)
 {
 	/* RUN_STALL pull high */
 	spi_set_register32(REG_SEL_RESET_SW(0),
@@ -1035,10 +1021,6 @@ void hifi4dsp_hw_rst(void)
 	msleep(10);
 
 }
-void hifidsp_hw_pull_low(void)
-{
-    gpio_direction_output(hifi4dsp_load->hifi4dsp_reset_gpio, 0);
-}
 
 int hifi4dsp_rst(void)
 {
@@ -1053,8 +1035,7 @@ int hifi4dsp_rst(void)
 	return 0;
 }
 
-
-static int hifi4dsp_load_pm_resume(struct device *device)
+static int hifi4dsp_load_pm_resume(struct platform_device *pdev)
 {
 	printk("%s is resume!\n", __func__);
 
@@ -1068,9 +1049,11 @@ static int hifi4dsp_load_pm_resume(struct device *device)
 
     pr_info("[%s] Re-config GPIO1_PM to input mode for mt8570\n", __func__);
     REG_ADDR((0x000F<<9) + (0x01<<2)) |= BIT(0);
+    // clear interrupt and enable interrupt mask for PAD_PM_GPIO1
+    REG_ADDR((0x000F<<9) + (0x01<<2)) |= (BIT(6));
+    REG_ADDR((0x000F<<9) + (0x01<<2)) &= ~(BIT(4));
 
 	spi_config_MSB();
-	hifi4dsp_spi_set_config_mode_status(0);
 	set_DSP_DRV();
 	//[FIXEDME] need to confirm if we need call this function here
 	hifi4dsp_rst();
@@ -1081,10 +1064,12 @@ static int hifi4dsp_load_pm_resume(struct device *device)
 	return 0;
 }
 
-static int hifi4dsp_load_pm_suspend(struct device *device)
+static int hifi4dsp_load_pm_suspend(struct platform_device *pdev)
 {
 	printk("%s is suspend!\n", __func__);
 	hifi4dsp_rst();
+	// disable interrupt mask
+	REG_ADDR((0x000F<<9) + (0x01<<2)) |= BIT(4);
 	gpio_direction_output(hifi4dsp_load->hifi4dsp_reset_gpio, 0);
 	msleep(10);
 	return 0;
