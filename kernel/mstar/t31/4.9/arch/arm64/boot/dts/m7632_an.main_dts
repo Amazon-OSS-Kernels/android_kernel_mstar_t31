@@ -1235,7 +1235,7 @@
 		irblaster-pwm_shelly = <2>;
 	};
 
-	gpio_wifi_ctl: wifi_ctl {
+	gpio_wifi_ctl {
 		compatible = "mstar,gpio-wifi-ctl";
 		wifi-ctl-gpio = <17>;
 	};

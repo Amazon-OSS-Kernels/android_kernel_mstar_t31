@@ -1796,11 +1796,10 @@ static int CPU_calibrating_proc_open(struct inode *inode, struct file *file)
 
 static int CPU_calibrating_proc_release(struct inode *inode, struct file * file)
 {
-	if (!atomic_read(&proc_is_open))
-		return -EACCES;
 
+	WARN_ON(!atomic_read(&proc_is_open));
 	atomic_set(&proc_is_open, 0);
-	return single_release(inode, file);
+        return single_release(inode, file);
 }
 
 static int on_demand_handshake_proc_open(struct inode *inode, struct file *file)
@@ -1932,9 +1931,8 @@ static int t_sensor_proc_open(struct inode *inode, struct file *file)
 
 static int t_sensor_proc_release(struct inode *inode, struct file * file)
 {
-	if (!atomic_read(&t_sensor_proc_is_open))
-		return -EACCES;
 
+	WARN_ON(!atomic_read(&t_sensor_proc_is_open));
 	atomic_set(&t_sensor_proc_is_open, 0);
 	return 0;
 }
@@ -1943,9 +1941,6 @@ ssize_t t_sensor_proc_write(struct file *file, const char __user *buf, size_t co
 {
 	char buffer[MAX_DMSG_WRITE_BUFFER];
 	long set;
-
-	if (!atomic_read(&t_sensor_proc_is_open))
-		return -EACCES;
 
 	if (!count)
 		return count;
@@ -1980,8 +1975,6 @@ ssize_t t_sensor_proc_write(struct file *file, const char __user *buf, size_t co
 
 ssize_t t_sensor_proc_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 {
-    if (!atomic_read(&t_sensor_proc_is_open))
-        return -EACCES;
 
     if (mstar_debug) {
         int i;
@@ -1989,7 +1982,7 @@ ssize_t t_sensor_proc_read(struct file *file, char __user *buf, size_t count, lo
             show_boost_client(i);
         printk("\n");
     }
-    printk_ratelimited("T sensor:%s\n",bootarg_dvfs_t_sensor_disable? "disable":"enable");
+    printk("T sensor:%s\n",bootarg_dvfs_t_sensor_disable? "disable":"enable");
 
 	return 0;
 }
