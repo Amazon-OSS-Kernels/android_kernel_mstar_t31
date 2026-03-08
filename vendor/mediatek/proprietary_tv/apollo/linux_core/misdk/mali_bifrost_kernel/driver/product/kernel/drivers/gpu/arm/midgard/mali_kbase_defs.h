@@ -2211,7 +2211,7 @@ struct kbasep_gwt_list_element {
  * @reg:                           External resource information, containing
  *                                 the corresponding VA region
  * @ref:                           Reference count.
-
+ *
  * External resources can be mapped into multiple contexts as well as the same
  * context multiple times.
  * As kbase_va_region is refcounted, we guarantee that it will be available
