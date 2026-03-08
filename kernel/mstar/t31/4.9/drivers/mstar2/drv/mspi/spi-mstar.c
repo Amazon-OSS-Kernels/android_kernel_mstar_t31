@@ -353,6 +353,9 @@ typedef struct
     u32 u32ClkSpi;
 }ST_DRV_MSPI_CLK;
 
+extern void mtk_dsp_wdt_disable(void);
+extern void hifidsp_hw_pull_low(void);
+
 //#define SPI_LOAD_IMAGE_SPEED		(18*1000*1000)
 //#define SPI_SPEED_LOW				(12*1000*1000)
 //#define SPI_SPEED_HIGH				(18*1000*1000)
@@ -368,10 +371,9 @@ static void mstar_hw_parsing_clock_table(u8 u8speed_low,u32 u32MspiClk)
     u16 i = 0;
     u16 j = 0;
     u16 k= 0;
-    u16 TempData = 0;
     u32 clk =0;
     ST_DRV_MSPI_CLK temp;
-    ST_DRV_MSPI_CLK clk_buffer[MSPI_CLK_INDEX_MAX];
+    static ST_DRV_MSPI_CLK clk_buffer[MSPI_CLK_INDEX_MAX];
     u8 clk_spi_m_p1[8] = {27, 48, 62, 72, 86, 108, 123, 160};
     u16 clk_spi_div[8] = {2, 4, 8, 16, 32, 64, 128, 256};
     memset(&temp,0,sizeof(ST_DRV_MSPI_CLK));
@@ -428,7 +430,7 @@ for(i = 0;i<MSPI_CLK_INDEX_MAX;i++)
     printk("u8ClkSpi_P1 =%d\n", clk_buffer[i].u8ClkSpi_P1);
     printk("u8ClkSpi_P2 =%d\n", clk_buffer[i].u8ClkSpi_P2);
     printk("u8ClkSpi_DIV =%d\n", clk_buffer[i].u8ClkSpi_DIV);
-    printk("u32ClkSpi = %ld\n", clk_buffer[i].u32ClkSpi);
+    printk("u32ClkSpi = %ld\n", (long int)clk_buffer[i].u32ClkSpi);
     if (u8speed_low) {
         g_lowu8ClkSpi_P1=clk_buffer[i].u8ClkSpi_P1;;
         g_lowu8ClkSpi_P2=clk_buffer[i].u8ClkSpi_P2;
@@ -439,8 +441,6 @@ for(i = 0;i<MSPI_CLK_INDEX_MAX;i++)
         g_u8ClkSpi_P2 = clk_buffer[i].u8ClkSpi_P2;
         g_u8ClkSpi_DIV = clk_buffer[i].u8ClkSpi_DIV;
     }
-
-
 }
 
 static void mstar_hw_set_clock(struct mstar_spi *bs,struct spi_device *spi,struct spi_transfer *tfr)
@@ -640,6 +640,7 @@ static void mstar_hw_txdummy(struct mstar_spi *bs,u8 len)
     {
         mstar_wrl(bs,mspi_txfifoaddr[cnt],0xff);
     }
+	mstar_wrh(bs, MSPI_WBF_RBF_SIZE, 0);
 	mstar_wrl(bs, MSPI_WBF_RBF_SIZE, len);
 }
 static void mstar_hw_txfillfifo(struct mstar_spi *bs,const u8*buffer,u8 len)
@@ -653,6 +654,7 @@ static void mstar_hw_txfillfifo(struct mstar_spi *bs,const u8*buffer,u8 len)
     {
         mstar_wrl(bs,mspi_txfifoaddr[cnt],buffer[cnt<<1]);
     }
+	mstar_wrh(bs, MSPI_WBF_RBF_SIZE, 0);
 	mstar_wrl(bs, MSPI_WBF_RBF_SIZE, len);
 }
 static void mstar_hw_rxgetfullfifo(struct mstar_spi *bs, u8 *buffer, u8 len)//full
@@ -714,66 +716,18 @@ static void mstar_spi_hw_transfer(struct mstar_spi *bs)//full
 
 static void mstar_spi_hw_rx_ext(struct mstar_spi *bs)
 {
-    int  u8Index = 0;
-    int  u16TempBuf = 0;
-    int  addr_tmp = 0;
     int  j = 0;
     MSPI_PRINT("%s %d\n",__func__,__LINE__);
     j =  bs->current_trans_len;
     if (bs->rx_buf != NULL)
     {
-    #if 0
-        for(u8Index = 0; u8Index < j; u8Index++)
-        {
-            if(u8Index & 1)
-            {
-                u16TempBuf = ((bs->tx_buf)[u8Index] << 8) | ((bs->tx_buf)[u8Index-1]);
-                if(u8Index >>WB16_INDEX)
-                {
-                   addr_tmp = MSPI_READ_EXT_BUF_OFFSET+WB16_INDEX+((u8Index&(~(1<<WB16_INDEX)))>> 1);
-                }
-                else if(u8Index >>WB8_INDEX)
-                {
-                   addr_tmp = MSPI_READ_EXT_BUF_OFFSET+((u8Index&(~(1<<WB8_INDEX)))>> 1);
-                }
-                else
-                {
-                   addr_tmp = (MSPI_READ_BUF_OFFSET + (u8Index >> 1));
-                }
-                u16TempBuf =  mstar_rd(bs,addr_tmp);
-                (bs->rx_buf)[u8Index] = u16TempBuf >> 8;
-                (bs->rx_buf)[u8Index-1] = u16TempBuf & 0xFF;
-            }
-            else if(u8Index == (j -1))
-            {
-                if(u8Index >>WB16_INDEX)
-                {
-                   addr_tmp = MSPI_READ_EXT_BUF_OFFSET+WB16_INDEX+((u8Index&(~(1<<WB16_INDEX)))>> 1);
-                }
-                else if(u8Index >>WB8_INDEX)
-                {
-                   addr_tmp = MSPI_READ_EXT_BUF_OFFSET+((u8Index&(~(1<<WB8_INDEX)))>> 1);
-                }
-                else
-                {
-                   addr_tmp = (MSPI_READ_BUF_OFFSET + (u8Index >> 1));
-                }
-                u16TempBuf =  mstar_rd(bs,addr_tmp);
-                (bs->rx_buf)[u8Index] = u16TempBuf >> 8;
-            }
-        }
-        #else
         mstar_hw_rxgetfifo(bs, bs->rx_buf, j);
-        #endif
-		bs->rx_buf += j;
+	bs->rx_buf += j;
     }
 }
 
 static void mstar_spi_hw_xfer_ext(struct mstar_spi *bs)//half
 {
-    int  u8Index = 0;
-    int  u16TempBuf = 0;
-    int  addr_tmp = 0;
     int  j = 0;
 
     j = bs->len;
@@ -783,58 +737,14 @@ static void mstar_spi_hw_xfer_ext(struct mstar_spi *bs)//half
 
     if (bs->tx_buf != NULL)
     {
-    #if 0
-        for(u8Index = 0; u8Index < j; u8Index++)
-        {
-            if(u8Index & 1)
-            {
-                u16TempBuf = ((bs->tx_buf)[u8Index] << 8) | ((bs->tx_buf)[u8Index-1]);
-                if(u8Index >>WB16_INDEX)
-                {
-                   addr_tmp = MSPI_WRITE_EXT_BUF_OFFSET+WB16_INDEX+((u8Index&(~(1<<WB16_INDEX)))>> 1);
-                }
-                else if(u8Index >>WB8_INDEX)
-                {
-                   addr_tmp = MSPI_WRITE_EXT_BUF_OFFSET+((u8Index&(~(1<<WB8_INDEX)))>> 1);
-                }
-                else
-                {
-                   addr_tmp = (MSPI_WRITE_BUF_OFFSET + (u8Index >> 1));
-                }
-                //if (bs->len > 30)
-                //    printk("%s %d,  bs->len= %d, 0x%02x = 0x%04x\n",__func__,__LINE__,bs->len,addr_tmp,u16TempBuf);
-                mstar_wr(bs,addr_tmp,u16TempBuf);
-            }
-            else if(u8Index == (j -1))
-            {
-                if(u8Index >>WB16_INDEX)
-                {
-                   addr_tmp = MSPI_WRITE_EXT_BUF_OFFSET+WB16_INDEX+((u8Index&(~(1<<WB16_INDEX)))>> 1);
-                }
-                else if(u8Index >>WB8_INDEX)
-                {
-                   addr_tmp = MSPI_WRITE_EXT_BUF_OFFSET+((u8Index&(~(1<<WB8_INDEX)))>> 1);
-                }
-                else
-                {
-                   addr_tmp = (MSPI_WRITE_BUF_OFFSET + (u8Index >> 1));
-                }
-                mstar_wr(bs,addr_tmp,(bs->tx_buf)[u8Index]);
-
-                //if (bs->len ==9)
-                //    printk("%s %d,  bs->len= %d,read[ 0x%02x] = 0x%04x , read back= 0x%04x\n",__func__,__LINE__,bs->len,addr_tmp,(bs->tx_buf)[u8Index],mstar_rd(bs,addr_tmp));
-            }
-        }
-#else
         mstar_hw_txfillfifo(bs, bs->tx_buf, j);
-#endif
-		(bs->tx_buf) += j;
-		mstar_wrl(bs, MSPI_WBF_RBF_SIZE, j);
-		mstar_wrh(bs, MSPI_WBF_RBF_SIZE, 0);
-	} else {
-		if (bs->rx_buf != NULL) {
-			mstar_wrh(bs, MSPI_WBF_RBF_SIZE, (j));
-			mstar_wrl(bs, MSPI_WBF_RBF_SIZE, 0);
+	(bs->tx_buf) += j;
+	mstar_wrl(bs, MSPI_WBF_RBF_SIZE, j);
+	mstar_wrh(bs, MSPI_WBF_RBF_SIZE, 0);
+    } else {
+	if (bs->rx_buf != NULL) {
+		mstar_wrh(bs, MSPI_WBF_RBF_SIZE, (j));
+		mstar_wrl(bs, MSPI_WBF_RBF_SIZE, 0);
         }
     }
     bs->len -= j;
@@ -1083,12 +993,15 @@ void trigger_dsp_wdt(void)
     pr_err("[%s][Reload DSP]\n", __func__);
 }
 
-#ifdef CONFIG_AMAZON_METRICS_LOG
 // Logs the reset metric. Called everytime a SPI transaction times out.
-static void log_timeout_metric(struct mstar_spi *bs, unsigned count) {
+static void log_timeout_metric(unsigned count) {
+#ifdef CONFIG_AMAZON_MINERVA_METRICS_LOG
+    log_counter_to_vitals_v2(ANDROID_LOG_INFO, KERNEL_METRICS_GROUP_ID, KERNEL_METRICS_MSTAR_SPI_COUNTER_SCHEMA_ID,
+		    "Kernel", "farfield", "spi", "timeouts", count, "count", NULL, VITALS_NORMAL, NULL, NULL);
+#elif defined(CONFIG_AMAZON_METRICS_LOG)
     log_counter_to_vitals(ANDROID_LOG_INFO, "Kernel", "farfield", "spi", "timeouts", count, "count", NULL, VITALS_NORMAL);
-}
 #endif
+}
 
 static int mstar_spi_transfer_one(struct spi_master *master,
         struct spi_message *mesg)
@@ -1143,15 +1056,11 @@ static int mstar_spi_transfer_one(struct spi_master *master,
             bs->print_irq = 1;
             bs->len = 0;
             spin_unlock_irqrestore(&bs->lock, flags);
-#ifdef CONFIG_AMAZON_METRICS_LOG
-            log_timeout_metric(bs, 1);
-#endif
+            log_timeout_metric(1);
             pr_err("MSPI timeout!! %s:%d -- Reset DSP - len: %d, cur_len: %d, tfr_len: %u\n",
                     __func__, __LINE__, bs->len, bs->current_trans_len, tfr->len);
             err = -ETIMEDOUT;
 #if WAR_MT8570_DSP
-            void hifidsp_hw_pull_low(void);
-            void mtk_dsp_wdt_disable(void);
             mtk_dsp_wdt_disable(); /* disable DSP wdt interruption */
             hifidsp_hw_pull_low(); /* put DSP in dead state */
 #endif
@@ -1199,6 +1108,7 @@ static void set_MSPI_DRV(void)
 	/* 3 :16 mA */
 
 	u32 mspi3_drv = 3; // default value
+	u32 reg_val = 0;
 	char *ptr = strstr(saved_command_line, "MSPI3_DRV");
 
 	if (ptr != NULL) {
@@ -1211,17 +1121,17 @@ static void set_MSPI_DRV(void)
 	}
 	printk ("MSPI3_DRV=%d ==> %d mA\n",mspi3_drv,1<<(mspi3_drv+1));
 	//SPI_CK
-	u32 reg_val = REG_ADDR((0x322E<<9) + (0x00<<2));
-	printk ("SPI_CK reg_val = 0x%lx --> ",reg_val);
+	reg_val = REG_ADDR((0x322E<<9) + (0x00<<2));
+	printk ("SPI_CK reg_val = 0x%lx --> ",(long unsigned int)reg_val);
 	reg_val = (reg_val & ~(0x3 << 4)) | (mspi3_drv << 4);
 	REG_ADDR((0x322E<<9) + (0x00<<2)) = reg_val;
-	printk ("0x%lx \n",reg_val);
+	printk ("0x%lx \n",(long unsigned int)reg_val);
 	//SPI_MOSI
 	reg_val = REG_ADDR((0x322E<<9) + (0x02<<2));
-	printk ("SPI_MOSI reg_val = 0x%lx --> ",reg_val);
+	printk ("SPI_MOSI reg_val = 0x%lx --> ",(long unsigned int)reg_val);
 	reg_val = (reg_val & ~(0x3 << 4)) | (mspi3_drv << 4);
 	REG_ADDR((0x322E<<9) + (0x02<<2)) = reg_val;
-	printk ("0x%lx \n",reg_val);
+	printk ("0x%lx \n",(long unsigned int)reg_val);
 }
 
 static int mstar_spi_probe(struct platform_device *pdev)
@@ -1229,10 +1139,13 @@ static int mstar_spi_probe(struct platform_device *pdev)
     struct spi_master *master;
     struct mstar_spi *bs;
     int err = -ENODEV;
-    int ret;
-    u32 prop;
+    int i = 0;
     char project_name[DTS_STRING_LENGTH];
     char property_name[DTS_STRING_LENGTH];
+    char *hw_build_id = NULL;
+    char *ptr = NULL;
+    u32 spi_cfg = 0;
+    u32 prop;
 
     if (strstr(saved_command_line, "farfield.dsp.name=mt8570") == NULL) {
         pr_info("mt8570 is not supported\n");
@@ -1278,13 +1191,11 @@ static int mstar_spi_probe(struct platform_device *pdev)
     master->dev.of_node = pdev->dev.of_node;
 
     bs = spi_master_get_devdata(master);
-#ifdef CONFIG_AMAZON_METRICS_LOG
     // Used for debugging purposes to make sure metrics work.
-    log_timeout_metric(bs, 0);
-#endif
+    log_timeout_metric(0);
 
     snprintf((char *)project_name, DTS_STRING_LENGTH, "%s", idme_get_config_name());
-    char *hw_build_id = memchr(project_name, '_', sizeof(project_name));
+    hw_build_id = memchr(project_name, '_', sizeof(project_name));
     if (hw_build_id) {
         /*Remove hw_specific string*/
         *hw_build_id = '\0';
@@ -1293,10 +1204,10 @@ static int mstar_spi_probe(struct platform_device *pdev)
     init_completion(&bs->done);
     if (of_match_device(mstar_mspi_match,&pdev->dev)){
         snprintf((char *)property_name, DTS_STRING_LENGTH, "%s%s", "reg_", project_name);
-        if (!of_property_read_u32_index(pdev->dev.of_node, property_name, 2,&bs->regs)) {
-            printk("[mspi] bs->regs_%s: is 0x%x \n", property_name, bs->regs);
-        } else if (!of_property_read_u32_index(pdev->dev.of_node, "reg",2,&bs->regs)) {
-            printk("[mspi] bs->regs = 0x%x\n",bs->regs);
+        if (!of_property_read_u32_index(pdev->dev.of_node, property_name, 2, (u32 *)&bs->regs)) {
+            printk("[mspi] bs->regs_%s: is 0x%x \n", property_name, (unsigned int)bs->regs);
+        } else if (!of_property_read_u32_index(pdev->dev.of_node, "reg",2, (u32 *)&bs->regs)) {
+            printk("[mspi] bs->regs = 0x%x\n",(unsigned int)bs->regs);
         } else {
             dev_err(&pdev->dev, "could not get resource\n");
             return -EINVAL;
@@ -1338,12 +1249,12 @@ static int mstar_spi_probe(struct platform_device *pdev)
         } else {
             printk("[mspi] bs->bus_num = %d\n",bs->bus_num);
         }
-        err = of_property_read_u32_index(pdev->dev.of_node, "clockreg",2,&bs->clkgen);
+        err = of_property_read_u32_index(pdev->dev.of_node, "clockreg",2, (u32 *)&bs->clkgen);
         if (err){
             dev_err(&pdev->dev, "could not get resource\n");
             return -EINVAL;
         } else {
-            printk("[mspi] bs->clkgen = 0x%x\n",bs->clkgen);
+            printk("[mspi] bs->clkgen = 0x%x\n",(u32)bs->clkgen);
         }
     } else {
         struct mstar_spi_data *data = dev_get_platdata(&pdev->dev);
@@ -1380,27 +1291,25 @@ static int mstar_spi_probe(struct platform_device *pdev)
         return err;
     }
 
-    u32 spi_cfg = 0;
     if (strstr(saved_command_line, "SPI_MODE=2")) {  // dual mode xfer
         MSPI_SPI_MODE = MSPI_DUAL_MODE;
-        mspi_rxfifoaddr = &mspi_rxfifoaddr_halfduplex;
+        mspi_rxfifoaddr = mspi_rxfifoaddr_halfduplex;
         MSPI_WBF_RBF_SIZE_MAX = 2 * (int) (sizeof(mspi_rxfifoaddr_halfduplex) / sizeof(mspi_rxfifoaddr_halfduplex[0]));
     } else if (strstr(saved_command_line, "SPI_MODE=1")) {  // single mode xfer full duplex
         MSPI_SPI_MODE = MSPI_SINGLE_MODE;
-        mspi_rxfifoaddr = &mspi_rxfifoaddr_fullduplex;
+        mspi_rxfifoaddr = mspi_rxfifoaddr_fullduplex;
         MSPI_WBF_RBF_SIZE_MAX = 2 * (int) (sizeof(mspi_rxfifoaddr_fullduplex) / sizeof(mspi_rxfifoaddr_fullduplex[0]));
     } else { // single mode & half duplex
         MSPI_SPI_MODE = MSPI_SINGLE_MODE_HALF_DUPLEX;
-        mspi_rxfifoaddr = &mspi_rxfifoaddr_halfduplex;
+        mspi_rxfifoaddr = mspi_rxfifoaddr_halfduplex;
         MSPI_WBF_RBF_SIZE_MAX = 2 * (int) (sizeof(mspi_rxfifoaddr_halfduplex) / sizeof(mspi_rxfifoaddr_halfduplex[0]));
     }
 
     printk ("MSPI_WBF_RBF_SIZE_MAX=%d \n",MSPI_WBF_RBF_SIZE_MAX);
-    int i;
     for(i=0;i<MSPI_WBF_RBF_SIZE_MAX/2;i++)
-        printk ("mspi_rxfifoaddr[%d]=0x%lx \n",i,mspi_rxfifoaddr[i]);
+        printk ("mspi_rxfifoaddr[%d]=0x%lx \n",i, (long unsigned int)mspi_rxfifoaddr[i]);
     set_MSPI_DRV();
-    char *ptr = strstr(saved_command_line, "SPI_SPEED_LOW=");
+    ptr = strstr(saved_command_line, "SPI_SPEED_LOW=");
     if (ptr) {
         sscanf(ptr + strlen("SPI_SPEED_LOW="), "%u",&spi_cfg);
     }
@@ -1439,7 +1348,7 @@ static int mstar_spi_remove(struct platform_device *pdev)
     return 0;
 }
 
-static int mstar_spi_pm_resume(struct platform_device *pdev)
+static int mstar_spi_pm_resume(struct device *pdev)
 {
     if (strstr(saved_command_line, "farfield.dsp.name=mt8570") == NULL) {
         pr_info("mt8570 is not supported\n");
@@ -1456,7 +1365,7 @@ static int mstar_spi_pm_resume(struct platform_device *pdev)
     return 0;
 }
 
-static int mstar_spi_pm_suspend(struct platform_device *pdev)
+static int mstar_spi_pm_suspend(struct device *pdev)
 {
     if (strstr(saved_command_line, "farfield.dsp.name=mt8570") == NULL) {
         pr_info("mt8570 is not supported\n");
@@ -1472,7 +1381,7 @@ static int mstar_spi_pm_suspend(struct platform_device *pdev)
 
 struct dev_pm_ops const mstar_spi_pm_ops = {
 	.suspend         = mstar_spi_pm_suspend,
-	.resume           = mstar_spi_pm_resume,
+	.resume          = mstar_spi_pm_resume,
 };
 
 static struct platform_driver mstar_spi_driver = {
