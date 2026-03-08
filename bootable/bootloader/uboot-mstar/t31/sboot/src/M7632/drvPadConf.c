@@ -2110,7 +2110,7 @@ _MEMMAP_REGBANK_32_,
         //reg_pwm1_mode
         _RVM1(0x2990, 0, BIT4),   //reg[322990]#4 = 0b
         //reg_allpad_in
-        //_RVM1(0x29e0, 0, BIT0),   //reg[3229e0]#0 = 0b
+        _RVM1(0x29e0, 0, BIT0),   //reg[3229e0]#0 = 0b
 _MEMMAP_REGBANK_10_,
     #endif
 

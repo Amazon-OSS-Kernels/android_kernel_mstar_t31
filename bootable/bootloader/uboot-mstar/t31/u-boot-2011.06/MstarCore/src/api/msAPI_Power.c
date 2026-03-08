@@ -89,7 +89,6 @@
 #define PM_WAKECFG_SUPPORT_IR_EXTEND_SIZE 14 //(2*7)
 #define PM_IR_USER_MODE_EXTEND_OFFSET 0x100
 #define PM_IR_USER_MODE_OFFSET_MAX 0x200
-
 #endif
 
 //-------------------------------------------------------------------------------------------------
@@ -269,6 +268,8 @@ MS_BOOL msAPI_PM_Reset(void)
 EN_POWER_ON_MODE msAPI_Power_QueryPowerOnMode(void)
 {
     U8 u8PowerDownMode =  (U8)MDrv_PM_PowerOnMode();
+    U8 u8WakeupSource = (U8)MDrv_PM_GetWakeupSource();
+    U8 key_code = (U8)MDrv_PM_GetIRPowerOnKey();
 
     switch ( u8PowerDownMode )
     {
@@ -277,22 +278,42 @@ EN_POWER_ON_MODE msAPI_Power_QueryPowerOnMode(void)
         case PM_MODE_SLEEP:     // 0x02
         case PM_MODE_DEEPSLEEP: // 0x03
         {
-            printf("DC on\n");
+            if (u8WakeupSource == E_PM_WAKEUPSRC_IR)
+                printf("[msAPI_Power][%d] DC on, WakeupSource = 0x%x, key_code = 0x%x\n", __LINE__, u8WakeupSource, key_code);
+            else
+                printf("[msAPI_Power][%d] DC on, WakeupSource = 0x%x\n", __LINE__, u8WakeupSource);
             return EN_POWER_DC_BOOT;
         }
         // AC ON
         case PM_MODE_DEFAULT:   // 0xFF
         {
-            printf("AC on\n");
+            if (u8WakeupSource == E_PM_WAKEUPSRC_IR)
+                printf("[msAPI_Power][%d] AC on, WakeupSource = 0x%x, key_code = 0x%x\n", __LINE__, u8WakeupSource, key_code);
+            else
+                printf("[msAPI_Power][%d] AC on, WakeupSource = 0x%x\n", __LINE__, u8WakeupSource);
             return EN_POWER_AC_BOOT;
         }
         // EXCEPTION
         default:
         {
             if(u8PowerDownMode == 0xF1)
-                printf("DC on !! \n");
+            {
+                if (u8WakeupSource == E_PM_WAKEUPSRC_IR)
+                    printf("[msAPI_Power][%d] DC on!! WakeupSource = 0x%x, key_code = 0x%x\n", __LINE__, u8WakeupSource, key_code);
+                else
+                    printf("[msAPI_Power][%d] DC on!! WakeupSource = 0x%x\n", __LINE__, u8WakeupSource);
+            }
+#if defined(CONFIG_MSTAR_M7632)
+            else if (u8PowerDownMode == 0xFD)
+            {
+                if (u8WakeupSource == E_PM_WAKEUPSRC_IR)
+                    printf("[msAPI_Power][%d] DC on!! PowerDownMode = 0x%x, WakeupSource = 0x%x, key_code = 0x%x\n", __LINE__, u8PowerDownMode, u8WakeupSource,key_code);
+                else
+                    printf("[msAPI_Power][%d] DC on!! WakeupSource = 0x%x\n", __LINE__, u8WakeupSource);
+            }
+#endif
             else
-                printf("read PM_SLEEP_AC_DC_ON error\n");
+                printf("[msAPI_Power][%d] read PM_SLEEP_AC_DC_ON error, PowerDownMode = 0x%x, WakeupSource = 0x%x, key_code = 0x%x\n", __LINE__, u8PowerDownMode, u8WakeupSource, key_code);
 
             return EN_POWER_DC_BOOT;
         }
