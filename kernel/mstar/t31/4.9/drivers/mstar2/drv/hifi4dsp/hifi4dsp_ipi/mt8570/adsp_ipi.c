@@ -91,7 +91,7 @@ enum adsp_ipi_id adsp_ipi_owner[ADSP_CORE_TOTAL];
 unsigned int adsp_ipi_id_record_count;
 unsigned int adsp_to_ap_ipi_count;
 unsigned int ap_to_adsp_ipi_count;
-unsigned int irq_gpio_num;
+static unsigned int irq_gpio_num;
 
 #ifdef CONFIG_MTK_HIFI4DSP_WDT_RECOVER_SUPPORT
 unsigned int is_from_wdt;
@@ -211,6 +211,7 @@ int mt8570_ipi_init(void)
 #if ADSP_IPI_STAMP_SUPPORT
 	int j = 0;
 #endif
+
 	scp_ipi_queue_init_ex(MT8570_ADSP_ID, mt8570_ipi_send_core_0);
 
 	for (i = 0; i < ADSP_CORE_TOTAL; i++) {
@@ -729,8 +730,16 @@ static void __exit mt8570_ipi_driver_exit(void)
 	pr_notice("%s\n", __func__);
 }
 
+#if defined(IPC_DISABLE_IPI)
+/*
+ * If defined IPC_DISABLE_IPI,then no need this module .
+ * IPC_DISABLE_IPI will defined on hailey product,
+ * Hailey product does not use the ipi function.
+ */
+#else
 module_init(mt8570_ipi_driver_init);
 module_exit(mt8570_ipi_driver_exit);
 
 MODULE_DESCRIPTION("MT8570 IPI Driver");
+#endif
 
