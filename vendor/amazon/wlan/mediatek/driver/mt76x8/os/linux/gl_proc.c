@@ -394,7 +394,10 @@ static ssize_t procCfgWrite(struct file *file, const char __user *buffer,
 	pucTmp += i4Pos;
 	u4CopySize -= i4Pos;
 
-	u4CopySize = (count < u4CopySize) ? count : (u4CopySize - 1);
+	if (u4CopySize >= (count+1))
+		u4CopySize = count;
+	else
+		u4CopySize -= 1;
 
 	if ((u4CopySize < 0) || (copy_from_user(pucTmp, buffer, u4CopySize))) {
 		DBGLOG(INIT, ERROR, "error of copy from user\n");
@@ -436,7 +439,10 @@ static ssize_t procDriverCmdWrite(struct file *file, const char __user *buffer,
 		goto freeBuf;
 	}
 
-	u4CopySize = (count < u4CopySize) ? count : (u4CopySize - 1);
+	if (u4CopySize >= (count+1))
+		u4CopySize = count;
+	else
+		u4CopySize -= 1;
 
 	if (copy_from_user(pucProcBuf, buffer, u4CopySize)) {
 		DBGLOG(INIT, ERROR, "error of copy from user\n");
@@ -475,7 +481,10 @@ static ssize_t procDbgLevelWrite(struct file *file, const char __user *buffer,
 	}
 
 	temp = pucProcBuf;
-	u4CopySize = (count < u4CopySize) ? count : (u4CopySize - 1);
+	if (u4CopySize >= count+1)
+		u4CopySize = count;
+	else
+		u4CopySize -= 1;
 
 	if (copy_from_user(pucProcBuf, buffer, u4CopySize)) {
 		DBGLOG(INIT, ERROR, "error of copy from user\n");
@@ -1141,10 +1150,8 @@ static ssize_t procMCRWrite(struct file *file, const char __user *buffer,
 	ASSERT(data);
 
 	u4CopySize = (count < sizeof(acBuf)) ? count : (sizeof(acBuf) - 1);
-	if (copy_from_user(acBuf, buffer, u4CopySize)) {
-		DBGLOG(INIT, ERROR, "error of copy from user\n");
-		return -EFAULT;
-	}
+	if (copy_from_user(acBuf, buffer, u4CopySize))
+		return 0;
 	acBuf[u4CopySize] = '\0';
 
 	num = sscanf(acBuf, "0x%x 0x%x", &rMcrInfo.u4McrOffset, &rMcrInfo.u4McrData);
@@ -1510,10 +1517,7 @@ static int procRxStatisticsWrite(struct file *file, const char *buffer, unsigned
 	ASSERT(data);
 
 	u4CopySize = (count < (sizeof(acBuf) - 1)) ? count : (sizeof(acBuf) - 1);
-	if (copy_from_user(acBuf, buffer, u4CopySize)) {
-		DBGLOG(INIT, ERROR, "error of copy from user\n");
-		return -EFAULT;
-	}
+	copy_from_user(acBuf, buffer, u4CopySize);
 	acBuf[u4CopySize] = '\0';
 
 	rv = kstrtoint(acBuf, 0, &u4ClearCounter);
@@ -1601,10 +1605,7 @@ static int procTxStatisticsWrite(struct file *file, const char *buffer, unsigned
 	ASSERT(data);
 
 	u4CopySize = (count < (sizeof(acBuf) - 1)) ? count : (sizeof(acBuf) - 1);
-	if (copy_from_user(acBuf, buffer, u4CopySize)) {
-		DBGLOG(INIT, ERROR, "error of copy from user\n");
-		return -EFAULT;
-	}
+	copy_from_user(acBuf, buffer, u4CopySize);
 	acBuf[u4CopySize] = '\0';
 
 	rv = kstrtoint(acBuf, 0, &u4ClearCounter);

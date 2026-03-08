@@ -495,7 +495,6 @@ static void kbasep_soft_event_cancel_job(struct kbase_jd_atom *katom)
 		kbase_js_sched_all(katom->kctx->kbdev);
 }
 
-#if IS_ENABLED(CONFIG_MALI_VECTOR_DUMP) || MALI_UNIT_TEST
 static void kbase_debug_copy_finish(struct kbase_jd_atom *katom)
 {
 	struct kbase_debug_copy_buffer *buffers = katom->softjob_data;
@@ -641,8 +640,8 @@ static int kbase_debug_copy_prepare(struct kbase_jd_atom *katom)
 				katom->kctx, user_extres.ext_resource &
 				~BASE_EXT_RES_ACCESS_EXCLUSIVE);
 
-		if (kbase_is_region_invalid_or_free(reg) ||
-		    reg->gpu_alloc == NULL) {
+		if (NULL == reg || NULL == reg->gpu_alloc ||
+				(reg->flags & KBASE_REG_FREE)) {
 			ret = -EINVAL;
 			goto out_unlock;
 		}
@@ -702,7 +701,7 @@ out_cleanup:
 	return ret;
 }
 
-static void kbase_mem_copy_from_extres_page(struct kbase_context *kctx,
+void kbase_mem_copy_from_extres_page(struct kbase_context *kctx,
 		void *extres_page, struct page **pages, unsigned int nr_pages,
 		unsigned int *target_page_nr, size_t offset, size_t *to_copy)
 {
@@ -744,17 +743,7 @@ static void kbase_mem_copy_from_extres_page(struct kbase_context *kctx,
 	kunmap(pages[*target_page_nr]);
 }
 
-/**
- * kbase_mem_copy_from_extres() - Copy from external resources.
- *
- * @kctx:	kbase context within which the copying is to take place.
- * @buf_data:	Pointer to the information about external resources:
- *		pages pertaining to the external resource, number of
- *		pages to copy.
- *
- * Return:      0 on success, error code otherwise.
- */
-static int kbase_mem_copy_from_extres(struct kbase_context *kctx,
+int kbase_mem_copy_from_extres(struct kbase_context *kctx,
 		struct kbase_debug_copy_buffer *buf_data)
 {
 	unsigned int i;
@@ -865,7 +854,6 @@ static int kbase_debug_copy(struct kbase_jd_atom *katom)
 
 	return 0;
 }
-#endif /* IS_ENABLED(CONFIG_MALI_VECTOR_DUMP) || MALI_UNIT_TEST */
 
 #define KBASEP_JIT_ALLOC_GPU_ADDR_ALIGNMENT ((u32)0x7)
 
@@ -1395,11 +1383,10 @@ static void kbase_ext_res_process(struct kbase_jd_atom *katom, bool map)
 			if (!kbase_sticky_resource_acquire(katom->kctx,
 					gpu_addr))
 				goto failed_loop;
-		} else {
+		} else
 			if (!kbase_sticky_resource_release(katom->kctx, NULL,
 					gpu_addr))
 				failed = true;
-		}
 	}
 
 	/*
@@ -1486,7 +1473,6 @@ int kbase_process_soft_job(struct kbase_jd_atom *katom)
 	case BASE_JD_REQ_SOFT_EVENT_RESET:
 		kbasep_soft_event_update_locked(katom, BASE_JD_SOFT_EVENT_RESET);
 		break;
-#if IS_ENABLED(CONFIG_MALI_VECTOR_DUMP) || MALI_UNIT_TEST
 	case BASE_JD_REQ_SOFT_DEBUG_COPY:
 	{
 		int res = kbase_debug_copy(katom);
@@ -1495,7 +1481,6 @@ int kbase_process_soft_job(struct kbase_jd_atom *katom)
 			katom->event_code = BASE_JD_EVENT_JOB_INVALID;
 		break;
 	}
-#endif /* IS_ENABLED(CONFIG_MALI_VECTOR_DUMP) || MALI_UNIT_TEST */
 	case BASE_JD_REQ_SOFT_JIT_ALLOC:
 		ret = kbase_jit_allocate_process(katom);
 		break;
@@ -1603,10 +1588,8 @@ int kbase_prepare_soft_job(struct kbase_jd_atom *katom)
 		if (katom->jc == 0)
 			return -EINVAL;
 		break;
-#if IS_ENABLED(CONFIG_MALI_VECTOR_DUMP) || MALI_UNIT_TEST
 	case BASE_JD_REQ_SOFT_DEBUG_COPY:
 		return kbase_debug_copy_prepare(katom);
-#endif /* IS_ENABLED(CONFIG_MALI_VECTOR_DUMP) || MALI_UNIT_TEST */
 	case BASE_JD_REQ_SOFT_EXT_RES_MAP:
 		return kbase_ext_res_prepare(katom);
 	case BASE_JD_REQ_SOFT_EXT_RES_UNMAP:
@@ -1635,11 +1618,9 @@ void kbase_finish_soft_job(struct kbase_jd_atom *katom)
 		kbase_sync_fence_in_remove(katom);
 		break;
 #endif /* CONFIG_SYNC || CONFIG_SYNC_FILE */
-#if IS_ENABLED(CONFIG_MALI_VECTOR_DUMP) || MALI_UNIT_TEST
 	case BASE_JD_REQ_SOFT_DEBUG_COPY:
 		kbase_debug_copy_finish(katom);
 		break;
-#endif /* IS_ENABLED(CONFIG_MALI_VECTOR_DUMP) || MALI_UNIT_TEST */
 	case BASE_JD_REQ_SOFT_JIT_ALLOC:
 		kbase_jit_allocate_finish(katom);
 		break;
