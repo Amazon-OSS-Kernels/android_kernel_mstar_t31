@@ -711,7 +711,7 @@ int do_bootm_linux(int flag, int argc, char *argv[], bootm_headers_t *images)
 
             // 1p is not in idme oem_data, or it is not set properly
             if ( !(strcmp(prop_1p, "")) || (strcmp(prop_1p, "1") && strcmp(prop_1p, "0")) )
-               /* Brandenburg is 1p by default as the property is added after Kaine/ABC is done */
+               /* Brandenburg is 1p by default as the property is added after ABC/ABC is done */
                if (!strcmp(amzn_target_device_name(), "brandenburg"))
                   sprintf(prop_1p, "%s", "1");
                else
@@ -787,7 +787,7 @@ int do_bootm_linux(int flag, int argc, char *argv[], bootm_headers_t *images)
         char * ldm_led_device_name = getenv("ldm_led_device_name");
         if (ldm_led_device_name){
             char ldm_led_device_name_arg[32] = {0};
-            UBOOT_DEBUG("ldm_led_device_name = %d!\n", ldm_led_device_name);
+            UBOOT_DEBUG("ldm_led_device_name = %s!\n", ldm_led_device_name);
 
             if(!strcmp(ldm_led_device_name, "ape5030"))
             {
@@ -798,7 +798,7 @@ int do_bootm_linux(int flag, int argc, char *argv[], bootm_headers_t *images)
                 if(ape5030_ch_map)
                 {
                     char ape5030_ch_map_arg[64] = {0};
-                    UBOOT_DEBUG("ape5030_ch_map = %d!\n", ape5030_ch_map);
+                    UBOOT_DEBUG("ape5030_ch_map = %s!\n", ape5030_ch_map);
 
                     if(strlen(ape5030_ch_map) == 35) // 35 character, ex: "FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF".
                     {

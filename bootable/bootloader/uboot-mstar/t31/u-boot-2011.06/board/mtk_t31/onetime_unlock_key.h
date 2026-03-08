@@ -51,7 +51,7 @@
 	"\x93\x02\x03\x01\x00\x01"
 #endif //CONFIG_MTK_BD_MT168B_10AT_19133_MT5870_M7332_ABC
 #else
-/* Brandenburg/Kaine/Kayala NA */
+/* Brandenburg/ABC/Kayala NA */
 #if defined(CONFIG_MTK_BD_MT164B_10AT_M7632_BRANDENBURG)
 #define ONETIME_UNLOCK_KEY \
 	"\x30\x82\x01\x22\x30\x0d\x06\x09\x2a\x86\x48\x86\xf7\x0d\x01\x01" \

@@ -125,8 +125,6 @@ static unsigned char *receive_bitmap = NULL;
 #define PAYLOAD_SIZE 1400
 #endif
 
-#define FLAG_ANTIROLLBACK_INITIALIZED (0x42525468)
-
 // sparse image
 struct fb_mmc_sparse {
     struct blk_desc *dev_desc;
