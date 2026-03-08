@@ -1697,4 +1697,19 @@
 		dsp-wdt-inverse_kaylaeu = <1>;
     };
 
+	dsp_mt8570 {
+		compatible = "amazon,dsp_mt8570";
+		host-irq-gpio = <10>;
+		reset-gpio = <42>;
+		wdt-irq-gpio = <7>;
+		dsp-wdt-inverse = <0>;
+		dsp-wdt-inverse_kayla = <1>;
+		dsp-wdt-inverse_kaylaeu = <1>;
+	};
+
+	adf_dsp {
+		compatible = "amazon,adf-dsp-driver";
+		status = "okay";
+	};
+
 };
