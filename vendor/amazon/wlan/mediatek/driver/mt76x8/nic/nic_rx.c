@@ -1796,7 +1796,7 @@ VOID nicRxProcessDataPacket(IN P_ADAPTER_T prAdapter, IN OUT P_SW_RFB_T prSwRfb)
 							HAL_RX_VECTOR_GET_RX_VECTOR(prRetSwRfb->prRxStatusGroup3, 4);
 					}
 					else {
-						DBGLOG(RX, ERROR, "invalid ucStaRecIdx %d\n", prRetSwRfb->ucStaRecIdx);
+						DBGLOG_RATELIMIT(RX, ERROR, "invalid ucStaRecIdx %d\n", prRetSwRfb->ucStaRecIdx);
 					}
 				}
 #endif
@@ -2954,6 +2954,17 @@ VOID nicRxProcessMgmtPacket(IN P_ADAPTER_T prAdapter, IN OUT P_SW_RFB_T prSwRfb)
 		return;
 	}
 
+	if (prSwRfb->u2HeaderLen < sizeof(WLAN_MAC_HEADER_T) ||
+		prSwRfb->u2PacketLen < prSwRfb->u2HeaderLen ||
+		prSwRfb->u2PacketLen > RX_GET_PACKET_MAX_SIZE(prAdapter)) {
+		DBGLOG(RX, WARN,
+			"Mgmt packet length check fail! length[H,P]:%u,%u\n",
+			prSwRfb->u2HeaderLen, prSwRfb->u2PacketLen);
+		RX_INC_CNT(&prAdapter->rRxCtrl, RX_DROP_TOTAL_COUNT);
+		nicRxReturnRFB(prAdapter, prSwRfb);
+		return;
+	}
+
 	ucSubtype = (*(PUINT_8) (prSwRfb->pvHeader) & MASK_FC_SUBTYPE) >> OFFSET_OF_FC_SUBTYPE;
 
 #if CFG_RX_PKTS_DUMP
@@ -3665,7 +3676,14 @@ WLAN_STATUS nicRxProcessActionFrame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSw
 #if CFG_SUPPORT_802_11V
 	case CATEGORY_WNM_ACTION:
 		{
-			wnmWNMAction(prAdapter, prSwRfb);
+			if (prSwRfb->prStaRec &&
+				GET_BSS_INFO_BY_INDEX(prAdapter,
+					prSwRfb->prStaRec->ucBssIndex)
+					->eNetworkType == NETWORK_TYPE_AIS) {
+				DBGLOG(RX, INFO, "WNM action frame: %d\n", __LINE__);
+				wnmWNMAction(prAdapter, prSwRfb);
+			} else
+				DBGLOG(RX, INFO, "WNM action frame: %d\n", __LINE__);
 		}
 		break;
 #endif
@@ -3687,6 +3705,19 @@ WLAN_STATUS nicRxProcessActionFrame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSw
 		break;
 #endif
 
+#if CFG_SUPPORT_802_11K
+	case CATEGORY_RM_ACTION:
+		switch (prActFrame->ucAction) {
+		case RM_ACTION_RM_REQUEST:
+			//rlmProcessRadioMeasurementRequest(prAdapter, prSwRfb);
+			break;
+		case RM_ACTION_REIGHBOR_RESPONSE:
+			rlmProcessNeighborReportResponse(prAdapter, prActFrame,
+							prSwRfb->u2PacketLen);
+			break;
+		}
+		break;
+#endif
 	default:
 		break;
 	}			/* end of switch case */

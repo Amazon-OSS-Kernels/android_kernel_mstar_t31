@@ -1187,7 +1187,7 @@ P_BSS_DESC_T scanAddToBssDesc(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwRfb)
 
 	P_WLAN_BEACON_FRAME_T prWlanBeaconFrame = (P_WLAN_BEACON_FRAME_T) NULL;
 	P_IE_SSID_T prIeSsid = (P_IE_SSID_T) NULL;
-	P_IE_SUPPORTED_RATE_T prIeSupportedRate = (P_IE_SUPPORTED_RATE_T) NULL;
+	P_IE_SUPPORTED_RATE_IOT_T prIeSupportedRate = (P_IE_SUPPORTED_RATE_IOT_T) NULL;
 	P_IE_EXT_SUPPORTED_RATE_T prIeExtSupportedRate = (P_IE_EXT_SUPPORTED_RATE_T) NULL;
 	UINT_8 ucHwChannelNum = 0;
 	UINT_8 ucIeDsChannelNum = 0;
@@ -1491,7 +1491,7 @@ P_BSS_DESC_T scanAddToBssDesc(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwRfb)
 			 */
 			/* TP-LINK will set extra and incorrect ie with ELEM_ID_SUP_RATES */
 			if ((!prIeSupportedRate) && (IE_LEN(pucIE) <= RATE_NUM_SW))
-				prIeSupportedRate = SUP_RATES_IE(pucIE);
+				prIeSupportedRate = SUP_RATES_IOT_IE(pucIE);
 			break;
 
 		case ELEM_ID_DS_PARAM_SET:
@@ -1603,7 +1603,15 @@ P_BSS_DESC_T scanAddToBssDesc(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwRfb)
 #endif /* CFG_ENABLE_WIFI_DIRECT */
 			}
 			break;
-
+#if CFG_SUPPORT_802_11K
+		case ELEM_ID_RRM_ENABLED_CAP:
+			/* RRM Capability IE is always in length 5 bytes */
+			kalMemZero(prBssDesc->aucRrmCap,
+				   sizeof(prBssDesc->aucRrmCap));
+			kalMemCopy(prBssDesc->aucRrmCap, pucIE + 2,
+				   sizeof(prBssDesc->aucRrmCap));
+			break;
+#endif
 			/* no default */
 		}
 	}
@@ -1795,8 +1803,10 @@ WLAN_STATUS scanAddScanResult(IN P_ADAPTER_T prAdapter, IN P_BSS_DESC_T prBssDes
 
 	prWlanBeaconFrame = (P_WLAN_BEACON_FRAME_T) prSwRfb->pvHeader;
 	COPY_MAC_ADDR(rMacAddr, prWlanBeaconFrame->aucBSSID);
+	memset(&rSsid, 0, sizeof(PARAM_SSID_T));
 	COPY_SSID(rSsid.aucSsid, rSsid.u4SsidLen, prBssDesc->aucSSID, prBssDesc->ucSSIDLen);
 
+	memset(&rConfiguration, 0, sizeof(PARAM_802_11_CONFIG_T));
 	rConfiguration.u4Length = sizeof(PARAM_802_11_CONFIG_T);
 	rConfiguration.u4BeaconPeriod = (UINT_32) prWlanBeaconFrame->u2BeaconInterval;
 	rConfiguration.u4ATIMWindow = prBssDesc->u2ATIMWindow;
@@ -1895,9 +1905,14 @@ WLAN_STATUS scanProcessBeaconAndProbeResp(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_
 
 	prScanInfo = &(prAdapter->rWifiVar.rScanInfo);
 
-	/* 4 <0> Ignore invalid Beacon Frame */
-	if ((prSwRfb->u2PacketLen - prSwRfb->u2HeaderLen) <
-	    (TIMESTAMP_FIELD_LEN + BEACON_INTERVAL_FIELD_LEN + CAP_INFO_FIELD_LEN)) {
+	/* 4 <0> Ignore invalid Beacon or Probe Response Frame */
+	if (prSwRfb->u2PacketLen < prSwRfb->u2HeaderLen ||
+		(prSwRfb->u2PacketLen - prSwRfb->u2HeaderLen) <
+		(TIMESTAMP_FIELD_LEN + BEACON_INTERVAL_FIELD_LEN
+		+ CAP_INFO_FIELD_LEN) ||
+		prSwRfb->u2HeaderLen != sizeof(WLAN_MAC_HEADER_T)) {
+		DBGLOG(SCN, ERROR,
+			"Ignore invalid Beacon or Probe Response\n");
 #ifndef _lint
 		ASSERT(0);
 #endif /* _lint */

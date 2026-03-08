@@ -338,6 +338,8 @@ mtk_cfg80211_tdls_mgmt(struct wiphy *wiphy,
 int mtk_cfg80211_tdls_oper(struct wiphy *wiphy, struct net_device *dev, u8 *peer, enum nl80211_tdls_operation oper);
 #endif
 
+INT_32 mtk_cfg80211_process_str_cmd(P_GLUE_INFO_T prGlueInfo, PUINT_8 cmd, INT_32 len);
+
 void mtk_reg_notify(IN struct wiphy *pWiphy, IN struct regulatory_request *pRequest);
 void cfg80211_regd_set_wiphy(IN struct wiphy *pWiphy);
 
@@ -349,5 +351,8 @@ int mtk_cfg80211_suspend(struct wiphy *wiphy, struct cfg80211_wowlan *wow);
 *                              F U N C T I O N S
 ********************************************************************************
 */
+#ifdef CFG_SUPPORT_PRIVACY_INFO
+uint64_t inline ssid_hash_64 (char *pucSsid);
+#endif
 
 #endif /* _GL_CFG80211_H */

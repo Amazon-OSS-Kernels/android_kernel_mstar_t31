@@ -119,6 +119,8 @@ UINT_32 g_au4AmpduTxAckSfCnt[ENUM_BAND_NUM] = {0};
 	(((_sValue) & BIT((n)-1)) ? ((_sValue) | BITS(n, 31)) : \
 	 ((_sValue) & ~BITS(n, 31)))
 
+#define COUNTRY_CODE_LENGTH 2
+
 /* TODO: Check */
 /* OID set handlers without the need to access HW register */
 PFN_OID_HANDLER_FUNC apfnOidSetHandlerWOHwAccess[] = {
@@ -1285,6 +1287,11 @@ WLAN_STATUS wlanTxCmdMthread(IN P_ADAPTER_T prAdapter)
 	KAL_SPIN_LOCK_DECLARATION();
 
 	ASSERT(prAdapter);
+	if (prAdapter == NULL)
+	{
+		DBGLOG(TX, ERROR, "%s prAdapter NULL\n", __func__);
+		return WLAN_STATUS_FAILURE;
+	}
 
 	prTempCmdQue = &rTempCmdQue;
 	QUEUE_INITIALIZE(prTempCmdQue);
@@ -1328,9 +1335,14 @@ WLAN_STATUS wlanTxCmdMthread(IN P_ADAPTER_T prAdapter)
 		else {
 			P_WIFI_CMD_T prWifiCmd =
 			(P_WIFI_CMD_T) prCmdInfo->pucInfoBuffer;
-			DBGLOG(INIT, ERROR,
-				"RETRY[%d] TX CMD: ID[0x%02X] SEQ[%u] CMD cannot send\n",
-			tx_retry_cnt, prWifiCmd->ucCID, prWifiCmd->ucSeqNum);
+
+			if (prWifiCmd == NULL) {
+				DBGLOG(INIT, ERROR, "CMD cannot send, pucInfoBuffer is NULL\n");
+                        } else {
+				DBGLOG(INIT, ERROR,
+					"RETRY[%d] TX CMD: ID[0x%02X] SEQ[%u] CMD cannot send\n",
+					tx_retry_cnt, prWifiCmd->ucCID, prWifiCmd->ucSeqNum);
+                        }
 			tx_retry_cnt = 0;
 		}
 #else
@@ -1356,8 +1368,13 @@ WLAN_STATUS wlanTxCmdMthread(IN P_ADAPTER_T prAdapter)
 		if(tx_retry_cnt) {
 			P_WIFI_CMD_T prWifiCmd =
 			(P_WIFI_CMD_T) prCmdInfo->pucInfoBuffer;
-			DBGLOG(INIT, STATE, "RETRY[%d] TX CMD: ID[0x%02X] SEQ[%u]\n",
-				tx_retry_cnt, prWifiCmd->ucCID, prWifiCmd->ucSeqNum);
+
+			if (prWifiCmd == NULL) {
+				DBGLOG(INIT, ERROR, "RETRY done, pucInfoBuffer is NULL\n");
+                        } else {
+				DBGLOG(INIT, STATE, "RETRY[%d] TX CMD: ID[0x%02X] SEQ[%u]!\n",
+					tx_retry_cnt, prWifiCmd->ucCID, prWifiCmd->ucSeqNum);
+                        }
 		}
 		tx_retry_cnt = 0;
 #endif
@@ -4528,7 +4545,7 @@ BOOLEAN wlanProcessSecurityFrame(IN P_ADAPTER_T prAdapter, IN P_NATIVE_PACKET pr
 	P_STA_RECORD_T prStaRec;
 	UINT_8 ucBssIndex;
 	UINT_32 u4PacketLen;
-	UINT_8 aucEthDestAddr[PARAM_MAC_ADDR_LEN];
+	UINT_8 aucEthDestAddr[PARAM_MAC_ADDR_LEN] = {0};
 	P_MSDU_INFO_T prMsduInfo;
 	UINT_8 ucStaRecIndex;
 
@@ -7498,12 +7515,25 @@ VOID wlanCfgSetDebugLevel(IN P_ADAPTER_T prAdapter)
 
 VOID wlanCfgSetCountryCode(IN P_ADAPTER_T prAdapter)
 {
-	CHAR aucValue[WLAN_CFG_VALUE_LEN_MAX];
+	UCHAR aucValue[WLAN_CFG_VALUE_LEN_MAX] = {0};
+	UCHAR ucCountry[COUNTRY_CODE_LENGTH] = {0};
+	UCHAR ucOffset = 0;
 
 	/* Apply COUNTRY Config */
 	if (wlanCfgGet(prAdapter, "Country", aucValue, "", 0) == WLAN_STATUS_SUCCESS) {
+		for (ucOffset = 0;ucOffset < COUNTRY_CODE_LENGTH; ucOffset++) {
+			/* not alpha and not 0 */
+			if (!(((aucValue[ucOffset] >= 'a') && (aucValue[ucOffset] <= 'z')) ||
+				((aucValue[ucOffset] >= 'A') && (aucValue[ucOffset] <= 'Z')) ||
+				(aucValue[ucOffset] == '0'))) {
+				DBGLOG(INIT, TRACE, "invalid country code\n");
+				return;
+			}
+		}
+
+		kalMemCopy(ucCountry, aucValue, COUNTRY_CODE_LENGTH);
 		prAdapter->rWifiVar.rConnSettings.u2CountryCode =
-		    (((UINT_16) aucValue[0]) << 8) | ((UINT_16) aucValue[1]);
+		    (((UINT_16) ucCountry[0]) << 8) | ((UINT_16) ucCountry[1]);
 
 		DBGLOG(INIT, TRACE, "u2CountryCode=0x%04x\n",
 			   prAdapter->rWifiVar.rConnSettings.u2CountryCode);
@@ -9301,6 +9331,65 @@ wlanGetStaAddrByWlanIdx(IN P_ADAPTER_T prAdapter, IN UINT_8 ucIndex)
 	return NULL;
 }
 
+#if CFG_STR_DHCP_RENEW_OFFLOAD
+VOID
+wlanSetDhcpOffloadInfo(P_GLUE_INFO_T prGlueInfo, struct net_device *prDev, BOOLEAN fgSuspend)
+{
+	WLAN_STATUS rStatus;
+	UINT_32 u4SetInfoLen;
+	UINT_8 ucBssIdx;
+	BOOLEAN fgOffload = FALSE;
+	P_BSS_INFO_T prBssInfo;
+	P_NETDEV_PRIVATE_GLUE_INFO prNetDevPrivate = (P_NETDEV_PRIVATE_GLUE_INFO) NULL;
+	CMD_DHCP_OFFLOAD_SETTING_T rDhcpSetCmd;
+
+	kalMemZero(&rDhcpSetCmd, sizeof(CMD_DHCP_OFFLOAD_SETTING_T));
+
+	prNetDevPrivate = (P_NETDEV_PRIVATE_GLUE_INFO) netdev_priv(prDev);
+
+	if (prNetDevPrivate->prGlueInfo != prGlueInfo)
+		DBGLOG(REQ, WARN, "%s: unexpected prGlueInfo(0x%p)!\n", __func__, prNetDevPrivate->prGlueInfo);
+
+	ucBssIdx = prNetDevPrivate->ucBssIdx;
+	prBssInfo = prGlueInfo->prAdapter->aprBssInfo[ucBssIdx];
+
+	/* TODO: Only support AIS for now */
+	if (prGlueInfo->prAdapter->prAisBssInfo->ucBssIndex == ucBssIdx) {
+		if (prBssInfo->fgIsDhcpAcked == TRUE &&
+				prBssInfo->eConnectionState == PARAM_MEDIA_STATE_CONNECTED) {
+			if (fgSuspend)
+				fgOffload = TRUE;
+		}
+	} else {
+		DBGLOG(REQ, ERROR, "%s: BssIdx not matched(%d:%d)!\n", __func__,
+				ucBssIdx, prGlueInfo->prAdapter->prAisBssInfo->ucBssIndex);
+		return;
+	}
+
+	rDhcpSetCmd.ucEnableOffload = fgOffload;
+	rDhcpSetCmd.ucSuspend = fgSuspend;
+	rDhcpSetCmd.ucBssIndex = ucBssIdx;
+	rDhcpSetCmd.u4RenewIntv = prBssInfo->u4DhcpRenewIntv;
+	kalMemCopy(rDhcpSetCmd.aucDhcpServerIpAddr,
+		prBssInfo->aucDhcpServerIpAddr,
+		sizeof(rDhcpSetCmd.aucDhcpServerIpAddr));
+
+    /* When FW receive command, it check connection state to decide apply setting or not */
+	rStatus = kalIoctl(prGlueInfo,
+				wlanoidSetDhcpOffladInfo,
+				(PVOID)&rDhcpSetCmd,
+				sizeof(rDhcpSetCmd),
+				FALSE,
+				FALSE,
+				TRUE,
+				&u4SetInfoLen);
+
+	if (rStatus != WLAN_STATUS_SUCCESS)
+		DBGLOG(REQ, WARN, "wlanoidSetDhcpOffladInfo failed\n");
+
+}
+#endif
+
 VOID
 wlanNotifyFwSuspend(P_GLUE_INFO_T prGlueInfo, struct net_device *prDev, BOOLEAN fgSuspend)
 {
@@ -10316,8 +10405,9 @@ VOID wlanSuspendPmHandle(P_GLUE_INFO_T prGlueInfo)
 	P_STA_RECORD_T prStaRec;
 	P_RX_BA_ENTRY_T prRxBaEntry;
 
-	if (prGlueInfo->prAdapter->u4IsKeepFullPwrBitmap)
-		wlanKeepFullPwr(prGlueInfo->prAdapter, FALSE);
+	prGlueInfo->prAdapter->u4IsKeepFullPwrBitmap |=
+		BLOCK_KEEP_FULL_PWR;
+	wlanKeepFullPwr(prGlueInfo->prAdapter, FALSE);
 
 	/* if wifi.cfg EAPOL offload is 0, we set rekey offload when enter wow */
 	if (!prGlueInfo->prAdapter->rWifiVar.ucEapolOffload) {
@@ -10553,8 +10643,9 @@ VOID wlanResumePmHandle(P_GLUE_INFO_T prGlueInfo)
 					  ePwrMode, FALSE);
 	}
 
-	if (prGlueInfo->prAdapter->u4IsKeepFullPwrBitmap)
-		wlanKeepFullPwr(prGlueInfo->prAdapter, TRUE);
+	prGlueInfo->prAdapter->u4IsKeepFullPwrBitmap &=
+		~BLOCK_KEEP_FULL_PWR;
+
 }
 
 void disconnect_sta(P_ADAPTER_T prAdapter, P_STA_RECORD_T sta_rec)

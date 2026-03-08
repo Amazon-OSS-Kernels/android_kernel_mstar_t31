@@ -1016,7 +1016,7 @@ VOID
 kalIndicateStatusAndComplete(IN P_GLUE_INFO_T prGlueInfo, IN WLAN_STATUS eStatus, IN PVOID pvBuf, IN UINT_32 u4BufLen)
 {
 
-	UINT_32 bufLen;
+	UINT_32 bufLen = 0;
 	P_PARAM_STATUS_INDICATION_T pStatus = (P_PARAM_STATUS_INDICATION_T) pvBuf;
 	P_PARAM_AUTH_EVENT_T pAuth = (P_PARAM_AUTH_EVENT_T) pStatus;
 	P_PARAM_PMKID_CANDIDATE_LIST_T pPmkid = (P_PARAM_PMKID_CANDIDATE_LIST_T) (pStatus + 1);
@@ -2424,14 +2424,22 @@ kalIoctlTimeout(IN P_GLUE_INFO_T prGlueInfo,
 	/* <6> Check if we use the command queue */
 	prIoReq->u4Flag = fgCmd;
 
-	/* <7> schedule the OID bit */
+	/* <7> schedule the OID bit
+	 * Use memory barrier to ensure OidEntry is written done and then set
+	 * bit.
+	 */
+	smp_mb();
 	set_bit(GLUE_FLAG_OID_BIT, &prGlueInfo->ulFlag);
 
 	/* <7.1> Hold wakelock to ensure OS won't be suspended */
 	KAL_WAKE_LOCK_TIMEOUT(prGlueInfo->prAdapter, &prGlueInfo->rTimeoutWakeLock,
 		MSEC_TO_JIFFIES(prGlueInfo->prAdapter->rWifiVar.u4WakeLockThreadWakeup));
 
-	/* <8> Wake up tx thread to handle kick start the I/O request */
+	/* <8> Wake up main thread to handle kick start the I/O request.
+	 * Use memory barrier to ensure set bit is done and then wake up main
+	 * thread.
+	 */
+	smp_mb();
 	wake_up_interruptible(&prGlueInfo->waitq);
 
 	/* <9> Block and wait for event or timeout, current the timeout is 2 secs */
@@ -3411,7 +3419,6 @@ static int idme_get_mac_addr(unsigned char *mac_addr, size_t addr_len)
 	int i, mac[IFHWADDRLEN];
 	mm_segment_t old_fs;
 	struct file *f;
-	size_t len;
 
 	if (!mac_addr || addr_len < IFHWADDRLEN) {
 		DBGLOG(INIT, ERROR, "invalid mac_addr ptr or buf\n");
@@ -3442,8 +3449,7 @@ static int idme_get_mac_addr(unsigned char *mac_addr, size_t addr_len)
 		str[1] = buf[i * 2 + 1];
 		if (!isxdigit(str[0]) || !isxdigit(str[1]))
 			goto bailout;
-		len = sscanf(str, "%02x", &mac[i]);
-		if (len != 1)
+		if (kstrtoint(str, 16, &mac[i]))
 			goto bailout;
 	}
 	for (i = 0; i < IFHWADDRLEN; i++)
@@ -5369,7 +5375,7 @@ static ssize_t kalMetPortWriteProcfs(struct file *file, const char __user *buffe
 {
 	char acBuf[128 + 1];	/* + 1 for "\0" */
 	UINT_32 u4CopySize;
-	int u16MetUdpPort;
+	int u16MetUdpPort = 0;
 
 	IN P_GLUE_INFO_T prGlueInfo;
 
@@ -5648,7 +5654,7 @@ VOID kalWowProcess(IN P_GLUE_INFO_T prGlueInfo, UINT_8 enable)
 				NULL,
 				0);
 
-	/* ARP offload */
+	/* ARP and DHCP offload */
 	wlanSetSuspendMode(prGlueInfo, enable);
 	/* p2pSetSuspendMode(prGlueInfo, TRUE); */
 
@@ -5744,6 +5750,10 @@ VOID kalFreeTxMsduWorker(struct work_struct *work)
 
 	while (QUEUE_IS_NOT_EMPTY(prTmpQue)) {
 		QUEUE_REMOVE_HEAD(prTmpQue, prMsduInfo, P_MSDU_INFO_T);
+		if (!prMsduInfo) {
+			DBGLOG(REQ, WARN, "prMsduInfo is NULL\n");
+			break;
+		}
 
 		nicTxFreePacket(prAdapter, prMsduInfo, FALSE);
 		nicTxReturnMsduInfo(prAdapter, prMsduInfo);
@@ -5763,7 +5773,7 @@ VOID kalFreeTxMsdu(P_ADAPTER_T prAdapter, P_MSDU_INFO_T prMsduInfo)
 #if CFG_SUPPORT_DFS
 VOID kalIndicateChannelSwitch(IN P_GLUE_INFO_T prGlueInfo, IN ENUM_CHNL_EXT_T eSco, IN UINT_8 ucChannelNum)
 {
-	struct cfg80211_chan_def chandef;
+	struct cfg80211_chan_def chandef = {0};
 	struct ieee80211_channel *prChannel = NULL;
 	enum nl80211_channel_type rChannelType;
 
@@ -5830,6 +5840,37 @@ INT_32 kalPmResumeHandler(struct notifier_block *notifier, unsigned long pm_even
 	return NOTIFY_DONE;
 }
 #endif
+
+void kal_sched_set(struct task_struct *p, int policy,
+		const struct sched_param *param,
+		int nice)
+{
+#if !defined(CONFIG_ANDROID) && (KERNEL_VERSION(5, 9, 0) <= LINUX_VERSION_CODE)
+	/* apply auto-detection based on function description
+	* TODO:
+	* kernel prefer modify "current" only, add sanity here?
+	*/
+
+#if KERNEL_VERSION(5, 14, 0) <= LINUX_VERSION_CODE
+	struct sched_attr attr = {
+		.sched_policy = policy,
+		.sched_priority = param->sched_priority,
+		.sched_nice = nice,
+	};
+
+	sched_setattr_nocheck(p, &attr);
+#else
+	if (policy == SCHED_NORMAL)
+		sched_set_normal(p, nice);
+	else if (policy == SCHED_FIFO)
+		sched_set_fifo(p);
+	else
+		sched_set_fifo_low(p);
+#endif /* KERNEL_VERSION(5, 14, 0) <= LINUX_VERSION_CODE */
+#else
+	sched_setscheduler(p, policy, param);
+#endif
+}
 
 WLAN_STATUS kalUpdateBssChannel(IN P_GLUE_INFO_T prGlueInfo,
 						IN UINT_8 aucSSID[],
