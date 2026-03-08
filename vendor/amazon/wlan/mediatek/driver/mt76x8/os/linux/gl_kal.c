@@ -2424,14 +2424,22 @@ kalIoctlTimeout(IN P_GLUE_INFO_T prGlueInfo,
 	/* <6> Check if we use the command queue */
 	prIoReq->u4Flag = fgCmd;
 
-	/* <7> schedule the OID bit */
+	/* <7> schedule the OID bit
+	 * Use memory barrier to ensure OidEntry is written done and then set
+	 * bit.
+	 */
+	smp_mb();
 	set_bit(GLUE_FLAG_OID_BIT, &prGlueInfo->ulFlag);
 
 	/* <7.1> Hold wakelock to ensure OS won't be suspended */
 	KAL_WAKE_LOCK_TIMEOUT(prGlueInfo->prAdapter, &prGlueInfo->rTimeoutWakeLock,
 		MSEC_TO_JIFFIES(prGlueInfo->prAdapter->rWifiVar.u4WakeLockThreadWakeup));
 
-	/* <8> Wake up tx thread to handle kick start the I/O request */
+	/* <8> Wake up main thread to handle kick start the I/O request.
+	 * Use memory barrier to ensure set bit is done and then wake up main
+	 * thread.
+	 */
+	smp_mb();
 	wake_up_interruptible(&prGlueInfo->waitq);
 
 	/* <9> Block and wait for event or timeout, current the timeout is 2 secs */
@@ -5648,7 +5656,7 @@ VOID kalWowProcess(IN P_GLUE_INFO_T prGlueInfo, UINT_8 enable)
 				NULL,
 				0);
 
-	/* ARP offload */
+	/* ARP and DHCP offload */
 	wlanSetSuspendMode(prGlueInfo, enable);
 	/* p2pSetSuspendMode(prGlueInfo, TRUE); */
 
@@ -5830,6 +5838,34 @@ INT_32 kalPmResumeHandler(struct notifier_block *notifier, unsigned long pm_even
 	return NOTIFY_DONE;
 }
 #endif
+
+void kal_sched_set(struct task_struct *p, int policy,
+		const struct sched_param *param,
+		int nice)
+{
+#if !defined(CONFIG_ANDROID) && (KERNEL_VERSION(5, 9, 0) <= LINUX_VERSION_CODE)
+	/* apply auto-detection based on function description
+	* TODO:
+	* kernel prefer modify "current" only, add sanity here?
+	*/
+	struct sched_attr attr = {
+		.sched_policy = policy,
+		.sched_priority = param->sched_priority,
+		.sched_nice = nice,
+	};
+
+	if (policy == SCHED_NORMAL)
+		sched_set_normal(p, nice);
+	else if (policy == SCHED_FIFO)
+		sched_set_fifo(p);
+	else
+		sched_set_fifo_low(p);
+
+	sched_setattr_nocheck(p, &attr);
+#else
+	sched_setscheduler(p, policy, param);
+#endif
+}
 
 WLAN_STATUS kalUpdateBssChannel(IN P_GLUE_INFO_T prGlueInfo,
 						IN UINT_8 aucSSID[],

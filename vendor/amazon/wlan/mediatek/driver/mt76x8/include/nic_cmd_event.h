@@ -502,6 +502,10 @@ typedef enum _ENUM_CMD_ID_T {
 	CMD_ID_SET_PF_CAPABILITY = 0x59,	/* 0x59 (Set) */
 #endif
 
+#if CFG_STR_DHCP_RENEW_OFFLOAD
+	CMD_ID_SET_DHCP_RENEW_OFFLOAD = 0x5A,	/* 0x5A (Set) */
+#endif
+
 #if CFG_SUPPORT_ROAMING_SKIP_ONE_AP
 	CMD_ID_SET_ROAMING_SKIP = 0x6D,	/* 0x6D (Set) used to setting roaming skip*/
 #endif
@@ -1588,6 +1592,15 @@ typedef struct _CMD_FW_LOG_2_HOST_CTRL_T {
 	UINT_32 u4HostTimeMSec;
 } CMD_FW_LOG_2_HOST_CTRL_T, *P_CMD_FW_LOG_2_HOST_CTRL_T;
 
+typedef struct _CMD_GET_MAGIC_PKT_INFO {
+	UINT_16 u2Type;
+	UINT_16 u2Len;
+	UINT_32 u4ConfigMask;
+	UINT_32 u4MagicPktCntTotal;
+	UINT_32 u4GpioPullLowCntTotal;
+	UINT_32 u4GpioPullHighCntTotal;
+} CMD_GET_MAGIC_PKT_INFO_T, *P_CMD_GET_MAGIC_PKT_INFO_T;
+
 typedef struct _CMD_CHIP_CONFIG_T {
 	UINT_16 u2Id;
 	UINT_8 ucType;
@@ -2570,6 +2583,8 @@ struct EVENT_CSI_DATA_T {
 #ifdef CFG_SUPPORT_EXT_PTA_DEBUG_COMMAND
 #define CMD_EXT_PTA_CONFIG_TYPE (0x7)
 #endif
+/* 0x8 is reserved for GARP count */
+#define CMD_GET_MAGIC_PKT_INFO_TYPE (0x9)
 
 /* for PtaConfig field */
 #define CMD_PTA_CONFIG_PTA_EN (1<<0)
@@ -3281,6 +3296,17 @@ typedef struct _EXT_EVENT_GET_TX_POWER_T {
 	UINT_8  ucDbdcIdx;
 
 } EVENT_GET_TX_POWER_T, *P_EVENT_GET_TX_POWER_T;
+
+#if CFG_STR_DHCP_RENEW_OFFLOAD
+typedef struct _CMD_DHCP_OFFLOAD_SETTING_T {
+	UINT_32 u4RenewIntv;	/* DHCP renew offload interval configured by upper-layer */
+	UINT_8 aucDhcpServerIpAddr[4];
+	UINT_8 ucBssIndex;
+	UINT_8 ucEnableOffload;
+	UINT_8 ucSuspend;
+	UINT_8 ucReserved[1];
+} CMD_DHCP_OFFLOAD_SETTING_T, *P_CMD_DHCP_OFFLOAD_SETTING_T;
+#endif
 
 typedef struct _CMD_SUSPEND_MODE_SETTING_T {
 	UINT_8 ucBssIndex;
