@@ -183,9 +183,9 @@ PM_Result MHal_PM_SetSRAMOffsetForMCU(void)
     u32 u32Cnt;
 
 #ifdef CONFIG_AMZ_MISC
-    if (!strcmp(idme_get_product_name(), "sophia") || !strcmp(idme_get_product_name(), "steffi")) {
+    if (!strcmp(idme_get_product_name(), "sophia") || !strcmp(idme_get_product_name(), "abc123")) {
         pr_info("Product is %s\n", idme_get_product_name());
-        MHal_PM_WriteReg16(0x1040, 0x01);//Sophia, Steffi IR Header
+        MHal_PM_WriteReg16(0x1040, 0x01);//Sophia, abc123 IR Header
     } else if (!strcmp(idme_get_product_name(), "abc123") || !strcmp(idme_get_product_name(), "abc123")) {
         pr_info("Product is %s\n", idme_get_product_name());
         MHal_PM_WriteReg16(0x1040, 0x00);//abc123, abc123 IR Header
