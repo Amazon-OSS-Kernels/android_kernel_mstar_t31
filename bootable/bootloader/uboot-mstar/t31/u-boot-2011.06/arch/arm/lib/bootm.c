@@ -711,7 +711,7 @@ int do_bootm_linux(int flag, int argc, char *argv[], bootm_headers_t *images)
 
             // 1p is not in idme oem_data, or it is not set properly
             if ( !(strcmp(prop_1p, "")) || (strcmp(prop_1p, "1") && strcmp(prop_1p, "0")) )
-               /* Brandenburg is 1p by default as the property is added after ABC/ABC is done */
+               /* Brandenburg is 1p by default as the property is added after Kaine/ABC is done */
                if (!strcmp(amzn_target_device_name(), "brandenburg"))
                   sprintf(prop_1p, "%s", "1");
                else

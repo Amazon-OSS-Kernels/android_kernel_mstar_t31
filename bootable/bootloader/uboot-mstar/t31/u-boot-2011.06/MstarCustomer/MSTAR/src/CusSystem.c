@@ -1428,8 +1428,8 @@ int do_config_gpio (cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 
     /*
        GPIO8_PM DEFAULT : INPUT mode
-       ABC(brandenburg) + suecreek : GPIO OUTPUT LOW
-       ABC(brandenburg) + mt8570 : N/A
+       Kaine(brandenburg) + suecreek : GPIO OUTPUT LOW
+       Kaine(brandenburg) + mt8570 : N/A
        ABC + suecreek : N/A
        ABC + mt8570 : GPIO INPUT
        */
