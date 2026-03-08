@@ -1449,7 +1449,7 @@
 		};
 		mali_gop {
 			heaptype = <0>;
-			max_size = <0x0 0xc800000>;
+			max_size = <0x0 0x38400000>;
 			normal_zone = <1>;
 		};
 		xc_frc_pq {
