@@ -3,7 +3,7 @@
 #
 #  build_uboot.sh
 #
-#  Copyright (c) 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#  Copyright (c) 2020-2023 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 #
 ################################################################################
 
@@ -110,6 +110,7 @@ function exec_build_uboot {
     # Move into the build base folder.
     pushd "${PLATFORM_EXTRACT_DIR}/${UBOOT_SUBPATH}"
     cp -f ${CONFIG_FILE} ./mk_config
+    chmod +x ./mk
     ./mk mtk_t31
 
     if [[ $? -ne 0 ]]
