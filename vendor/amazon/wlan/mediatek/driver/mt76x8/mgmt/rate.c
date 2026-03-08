@@ -180,7 +180,7 @@ const BOOLEAN afgIsOFDMRate[RATE_NUM_SW] = {
 */
 /*----------------------------------------------------------------------------*/
 VOID
-rateGetRateSetFromIEs(IN P_IE_SUPPORTED_RATE_IOT_T prIeSupportedRate,
+rateGetRateSetFromIEs(IN P_IE_SUPPORTED_RATE_T prIeSupportedRate,
 		      IN P_IE_EXT_SUPPORTED_RATE_T prIeExtSupportedRate,
 		      OUT PUINT_16 pu2OperationalRateSet,
 		      OUT PUINT_16 pu2BSSBasicRateSet, OUT PBOOLEAN pfgIsUnknownBSSBasicRate)
@@ -201,12 +201,7 @@ rateGetRateSetFromIEs(IN P_IE_SUPPORTED_RATE_IOT_T prIeSupportedRate,
 		 * 12(B), 18(B), 24(B), 36(B), 48(B), 54(B)"
 		 */
 		/* ASSERT(prIeSupportedRate->ucLength <= ELEM_MAX_LEN_SUP_RATES); */
-		if (prIeSupportedRate->ucLength > ELEM_MAX_LEN_SUP_RATES_IOT) {
-			*pu2OperationalRateSet = 0;
-			*pu2BSSBasicRateSet = 0;
-			*pfgIsUnknownBSSBasicRate = TRUE;
-			return;
-		}
+		ASSERT(prIeSupportedRate->ucLength <= RATE_NUM_SW);
 
 		for (i = 0; i < prIeSupportedRate->ucLength; i++) {
 			ucRate = prIeSupportedRate->aucSupportedRates[i] & RATE_MASK;
@@ -232,6 +227,7 @@ rateGetRateSetFromIEs(IN P_IE_SUPPORTED_RATE_IOT_T prIeSupportedRate,
 
 	if (prIeExtSupportedRate) {
 		/* ASSERT(prIeExtSupportedRate->ucLength <= ELEM_MAX_LEN_EXTENDED_SUP_RATES); */
+
 		for (i = 0; i < prIeExtSupportedRate->ucLength; i++) {
 			ucRate = prIeExtSupportedRate->aucExtSupportedRates[i] & RATE_MASK;
 

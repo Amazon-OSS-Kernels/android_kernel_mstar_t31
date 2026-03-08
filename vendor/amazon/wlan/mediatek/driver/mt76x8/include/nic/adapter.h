@@ -534,27 +534,6 @@ struct _BSS_INFO_T {
 	SWITCH_CH_AND_BAND_PARAMS_T CSAParams;
 	UINT_8 fgHasStopTx;
 #endif
-
-#if CFG_STR_DHCP_RENEW_OFFLOAD
-	BOOLEAN fgIsDhcpAcked;
-	UINT_8 aucDhcpServerIpAddr[4];
-	UINT_32 u4DhcpRenewIntv;	/* DHCP renew offload interval configured by upper-layer */
-#endif
-};
-
-struct _NEIGHBOR_AP_T {
-	LINK_ENTRY_T rLinkEntry;
-	UINT_8 aucBssid[MAC_ADDR_LEN];
-	UINT_8 fgHT:1;
-	UINT_8 fgSameMD:1;
-	UINT_8 fgRmEnabled:1;
-	UINT_8 fgFromBtm:1;
-	UINT_8 fgQoS:1;
-	UINT_8 ucReserved:3;
-	UINT_8 fgPrefPresence;
-	UINT_8 ucPreference;
-	UINT_8 ucChannel;
-	UINT_64 u8TermTsf;
 };
 
 struct _AIS_SPECIFIC_BSS_INFO_T {
@@ -617,12 +596,6 @@ struct _AIS_SPECIFIC_BSS_INFO_T {
 	TIMER_T rSaQueryTimer;
 	BOOLEAN fgBipKeyInstalled;
 #endif
-#if CFG_SUPPORT_802_11V
-	BSS_TRANSITION_MGT_PARAM_T rBTMParam;
-#endif
-	LINK_MGMT_T rNeighborApList;
-	OS_SYSTIME rNeiApRcvTime;
-	UINT_32 u4NeiApValidInterval;
 };
 
 struct _BOW_SPECIFIC_BSS_INFO_T {
@@ -672,7 +645,7 @@ typedef struct _WIFI_VAR_T {
 
 	AIS_FSM_INFO_T rAisFsmInfo;
 
-	ENUM_PWR_STATE_T aePwrState[BSS_INFO_NUM + 1];
+	ENUM_PWR_STATE_T aePwrState[BSS_INFO_NUM];
 
 	BSS_INFO_T arBssInfoPool[BSS_INFO_NUM];
 
@@ -1434,16 +1407,6 @@ struct _ADAPTER_T {
 #endif
 	WIFI_FEM_CFG_T rWifiFemCfg;
 	struct CSI_DATA_T rCsiData;
-
-	ENUM_TX_RESULT_CODE_T r1xTxDoneStatus;
-	/*
-		fgIsTest1xTx
-		= 0 for default and no simulation
-		= 1 for "packet have not sent to queue" simulation
-		= 2 for "packet stuck in queue" simulation
-	*/
-	UINT_8 fgIsTest1xTx;
-
 };				/* end of _ADAPTER_T */
 
 /*******************************************************************************

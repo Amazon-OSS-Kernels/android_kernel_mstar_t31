@@ -5203,11 +5203,6 @@ VOID mqmProcessScanResult(IN P_ADAPTER_T prAdapter, IN P_BSS_DESC_T prScanResult
 #if CFG_SUPPORT_TDLS
 			TdlsBssExtCapParse(prStaRec, pucIE);
 #endif /* CFG_SUPPORT_TDLS */
-#if CFG_SUPPORT_802_11V_BSS_TRANSITION_MGT
-			prStaRec->fgSupportBTM =
-				!!((*(PUINT_32)(pucIE + 2)) &
-			BIT(ELEM_EXT_CAP_BSS_TRANSITION_BIT));
-#endif
 			break;
 
 		case ELEM_ID_WMM:
@@ -5405,11 +5400,10 @@ VOID mqmGenerateWmmInfoIE(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo)
 		return;
 
 	prStaRec = cnmGetStaRecByIndex(prAdapter, prMsduInfo->ucStaRecIndex);
-	if (prStaRec == NULL) {
-		DBGLOG(QM, ERROR, "prStaRec of ucStaRecIndex %d is NULL!\n",
-			prMsduInfo->ucStaRecIndex);
+	ASSERT(prStaRec);
+
+	if (prStaRec == NULL)
 		return;
-	}
 
 	if (!prStaRec->fgIsWmmSupported)
 		return;

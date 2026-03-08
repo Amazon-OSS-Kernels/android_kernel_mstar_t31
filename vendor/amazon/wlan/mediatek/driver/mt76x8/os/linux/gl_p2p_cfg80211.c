@@ -437,12 +437,7 @@ struct wireless_dev *mtk_p2p_cfg80211_add_iface(struct wiphy *wiphy,
 		netif_tx_stop_all_queues(prP2pInfo->aprRoleHandler);
 
 		/* register for net device */
-#if KERNEL_VERSION(5, 12, 0) <= CFG80211_VERSION_CODE
-		if (cfg80211_register_netdevice(prP2pInfo->aprRoleHandler)
-			< 0) {
-#else
 		if (register_netdevice(prP2pInfo->aprRoleHandler) < 0) {
-#endif
 			DBGLOG(P2P, TRACE, "mtk_p2p_cfg80211_add_iface 456\n");
 			DBGLOG(INIT, WARN, "unable to register netdevice for p2p\n");
 			kfree(prWdev);
@@ -631,12 +626,7 @@ int mtk_p2p_cfg80211_del_iface(struct wiphy *wiphy, struct wireless_dev *wdev)
 	netif_tx_stop_all_queues(UnregRoleHander);
 
 	/* Here are functions which need rtnl_lock */
-#if KERNEL_VERSION(5, 12, 0) <= CFG80211_VERSION_CODE
-	cfg80211_unregister_netdevice(UnregRoleHander);
-#else
 	unregister_netdevice(UnregRoleHander);
-#endif
-
 	/* free is called at destructor */
 	/* free_netdev(UnregRoleHander); */
 
@@ -2921,7 +2911,7 @@ void mtk_p2p_cfg80211_mgmt_frame_register(IN struct wiphy *wiphy,
 			}
 			break;
 		default:
-			DBGLOG(P2P, ERROR, "unsupported frame type:%x\n", frame_type);
+			DBGLOG(P2P, ERROR, "Ask frog to add code for mgmt:%x\n", frame_type);
 			break;
 		}
 
@@ -3544,12 +3534,10 @@ int mtk_p2p_cfg80211_testmode_sw_cmd(IN struct wiphy *wiphy, IN void *data, IN i
 	DBGLOG(P2P, TRACE, "--> %s()\n", __func__);
 #endif
 
-	if (len < sizeof(struct _NL80211_DRIVER_SW_CMD_PARAMS))
-		rstatus = WLAN_STATUS_INVALID_LENGTH;
-	else if (!data)
-		rstatus = WLAN_STATUS_INVALID_DATA;
-	else {
+	if (data && len)
 		prParams = (P_NL80211_DRIVER_SW_CMD_PARAMS) data;
+
+	if (prParams) {
 		if (prParams->set == 1) {
 			rstatus = kalIoctl(prGlueInfo,
 					   (PFN_OID_HANDLER_FUNC) wlanoidSetSwCtrlWrite,

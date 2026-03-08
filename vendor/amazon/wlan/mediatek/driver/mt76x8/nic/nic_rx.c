@@ -1796,7 +1796,7 @@ VOID nicRxProcessDataPacket(IN P_ADAPTER_T prAdapter, IN OUT P_SW_RFB_T prSwRfb)
 							HAL_RX_VECTOR_GET_RX_VECTOR(prRetSwRfb->prRxStatusGroup3, 4);
 					}
 					else {
-						DBGLOG_RATELIMIT(RX, ERROR, "invalid ucStaRecIdx %d\n", prRetSwRfb->ucStaRecIdx);
+						DBGLOG(RX, ERROR, "invalid ucStaRecIdx %d\n", prRetSwRfb->ucStaRecIdx);
 					}
 				}
 #endif
@@ -3665,14 +3665,7 @@ WLAN_STATUS nicRxProcessActionFrame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSw
 #if CFG_SUPPORT_802_11V
 	case CATEGORY_WNM_ACTION:
 		{
-			if (prSwRfb->prStaRec &&
-				GET_BSS_INFO_BY_INDEX(prAdapter,
-					prSwRfb->prStaRec->ucBssIndex)
-					->eNetworkType == NETWORK_TYPE_AIS) {
-				DBGLOG(RX, INFO, "WNM action frame: %d\n", __LINE__);
-				wnmWNMAction(prAdapter, prSwRfb);
-			} else
-				DBGLOG(RX, INFO, "WNM action frame: %d\n", __LINE__);
+			wnmWNMAction(prAdapter, prSwRfb);
 		}
 		break;
 #endif
@@ -3694,19 +3687,6 @@ WLAN_STATUS nicRxProcessActionFrame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSw
 		break;
 #endif
 
-#if CFG_SUPPORT_802_11K
-	case CATEGORY_RM_ACTION:
-		switch (prActFrame->ucAction) {
-		case RM_ACTION_RM_REQUEST:
-			//rlmProcessRadioMeasurementRequest(prAdapter, prSwRfb);
-			break;
-		case RM_ACTION_REIGHBOR_RESPONSE:
-			rlmProcessNeighborReportResponse(prAdapter, prActFrame,
-							prSwRfb->u2PacketLen);
-			break;
-		}
-		break;
-#endif
 	default:
 		break;
 	}			/* end of switch case */

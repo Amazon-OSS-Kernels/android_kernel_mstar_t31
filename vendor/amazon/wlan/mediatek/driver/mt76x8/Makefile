@@ -112,10 +112,6 @@ ifneq ($(CFG_IOCTL_WAIT_FOR_COMPLETION_TIMEOUT),)
 ccflags-y += -DCFG_IOCTL_WAIT_FOR_COMPLETION_TIMEOUT=$(CFG_IOCTL_WAIT_FOR_COMPLETION_TIMEOUT)
 endif
 
-ifeq ($(CFG_STR_DHCP_RENEW_OFFLOAD), y)
-ccflags-y += -DCFG_STR_DHCP_RENEW_OFFLOAD=1
-endif
-
 # ---------------------------------------------------
 # Compile Options
 # ---------------------------------------------------
@@ -129,8 +125,6 @@ endif
 ccflags-y += -DCFG_SUPPORT_DEBUG_FS=$(CFG_SUPPORT_DEBUG_FS)
 ifneq ($(TARGET_BUILD_VARIANT), user)
 ccflags-y += -DWLAN_INCLUDE_PROC=1
-else
-ccflags-y += -DCFG_SUPPORT_PRIVACY_INFO
 endif
 ccflags-y += -DCFG_SUPPORT_AGPS_ASSIST=$(CFG_SUPPORT_AGPS_ASSIST)
 ccflags-y += -DCFG_SUPPORT_TSF_USING_BOOTTIME=$(CFG_SUPPORT_TSF_USING_BOOTTIME)
@@ -173,12 +167,6 @@ else
     ccflags-y += -DCFG_SUPPORT_SAE=0
     ccflags-y += -DCFG_SUPPORT_OWE=0
     ccflags-y += -DCFG_SUPPORT_SUITB=0
-endif
-
-# Disable wlan feature send only one cfg to FW
-# Default is enabled in the config.h
-ifeq ($(CFG_SUPPORT_SEND_ONLY_ONE_CFG), n)
-    ccflags-y += -DCFG_SUPPORT_SEND_ONLY_ONE_CFG=0
 endif
 
 # Enable Metrics for Wlan reset
@@ -368,20 +356,10 @@ endif
 DRIVER_BUILD_DATE=$(shell date +%Y%m%d%H%M%S)
 ccflags-y += -DDRIVER_BUILD_DATE='"$(DRIVER_BUILD_DATE)"'
 
-ifeq ($(CFG_DFS_NEWCH_DFS_FORCE_DISCONNECT),n)
+ifeq ($(CFG_DFS_NEWCH_DFS_FORCE_DISCONNECT),y)
+	ccflags-y += -DCFG_DFS_NEWCH_DFS_FORCE_DISCONNECT=1
+else
 	ccflags-y += -DCFG_DFS_NEWCH_DFS_FORCE_DISCONNECT=0
-endif
-
-ifeq ($(CFG_SUPPORT_802_11K),y)
-ccflags-y += -DCFG_SUPPORT_802_11K=1
-endif
-
-ifeq ($(CFG_SUPPORT_802_11V),y)
-ccflags-y += -DCFG_SUPPORT_802_11V=1
-endif
-
-ifeq ($(CFG_SUPPORT_802_11V_BSS_TRANSITION_MGT),y)
-ccflags-y += -DCFG_SUPPORT_802_11V_BSS_TRANSITION_MGT=1
 endif
 
 ifneq ($(CFG_CFG80211_VERSION),)
@@ -463,12 +441,6 @@ ifneq ($(CFG_RESET_DUE_TO_REG_NETDEV_FAIL),)
 ccflags-y += -DCFG_RESET_DUE_TO_REG_NETDEV_FAIL=$(CFG_RESET_DUE_TO_REG_NETDEV_FAIL)
 endif
 
-ifneq ($(CFG_FTV_62866_PATCH),)
-ccflags-y += -DCFG_FTV_62866_PATCH=$(CFG_FTV_62866_PATCH)
-endif
-
-
-
 # ---------------------------------------------------
 # Directory List
 # ---------------------------------------------------
@@ -548,8 +520,7 @@ MGMT_OBJS := $(MGMT_DIR)ais_fsm.o \
              $(MGMT_DIR)roaming_fsm.o \
              $(MGMT_DIR)tkip_mic.o \
              $(MGMT_DIR)hs20.o \
-             $(MGMT_DIR)tdls.o \
-			 $(MGMT_DIR)wnm.o
+             $(MGMT_DIR)tdls.o
 
 CHIPS_OBJS := $(CHIPS)mt6632.o \
 			  $(CHIPS)mt7668.o
@@ -610,7 +581,6 @@ ccflags-y += -DCFG_PREALLOC_MEMORY
 ccflags-y += -I$(src)/prealloc/include
 MODULE_NAME_PREALLOC = $(MODULE_NAME)_prealloc
 PREALLOC_OBJS := prealloc/prealloc.o
-PREALLOC_OBJS += prealloc/chip_reset_info.o
 $(MODULE_NAME_PREALLOC)-objs += $(PREALLOC_OBJS)
 obj-m += $(MODULE_NAME_PREALLOC).o
 endif

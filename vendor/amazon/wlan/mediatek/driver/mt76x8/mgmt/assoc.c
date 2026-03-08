@@ -87,54 +87,49 @@
 APPEND_VAR_IE_ENTRY_T txAssocReqIETable[] = {
 #if CFG_SUPPORT_SPEC_MGMT
 	{(ELEM_HDR_LEN + ELEM_MAX_LEN_POWER_CAP), NULL, rlmReqGeneratePowerCapIE}
-	,			/* Assoc IE Order: 6, Element ID: 33 */
+	,			/* 33 */
 	{(ELEM_HDR_LEN + ELEM_MAX_LEN_SUPPORTED_CHANNELS), NULL, rlmReqGenerateSupportedChIE}
-	,			/* Assoc IE Order: 7, Element ID: 36 */
-#endif
-	{(ELEM_HDR_LEN + ELEM_MAX_LEN_RSN), NULL, rsnGenerateRSNIE}
-	,			/* Assoc IE Order: 8, Element ID: 48 */
-#if CFG_SUPPORT_802_11K
-	{(ELEM_HDR_LEN + 5), NULL, rlmReqGenerateRRMEnabledCapIE}
-	,			/* Assoc IE Order: 10, Element ID: 70 */
+	,			/* 36 */
 #endif
 	{(ELEM_HDR_LEN + ELEM_MAX_LEN_HT_CAP), NULL, rlmReqGenerateHtCapIE}
-	,			/* Assoc IE Order: 13, Element ID: 45 */
-	{(ELEM_HDR_LEN + ELEM_MAX_LEN_EXT_CAP), NULL, rlmReqGenerateExtCapIE}
-	,			/* Assoc IE Order: 15, Element ID: 127 */
-#if CFG_SUPPORT_PASSPOINT
-	{(ELEM_HDR_LEN + ELEM_MAX_LEN_INTERWORKING), NULL, hs20GenerateInterworkingIE}
-	,			/* Assoc IE Order: 18, Element ID: 107 */
-#endif /* CFG_SUPPORT_PASSPOINT */
-#if CFG_SUPPORT_802_11AC
-	{(ELEM_HDR_LEN + ELEM_MAX_LEN_VHT_CAP), NULL, rlmReqGenerateVhtCapIE}
-	,			/* Assoc IE Order: 22, Element ID: 191 */
-	{(ELEM_HDR_LEN + ELEM_MAX_LEN_VHT_OP_MODE_NOTIFICATION), NULL, rlmReqGenerateVhtOpNotificationIE}
-	,			/* Assoc IE Order: 23, Element ID: 199 */
-#endif
-#if CFG_SUPPORT_H2E
-	{0, rsnCalRSNXELen, rsnGenerateRSNXE}
-	,			/* Assoc IE Order: 43, Element ID: 244 */
+	,			/* 45 */
+#if CFG_SUPPORT_WPS2
+	{(ELEM_HDR_LEN + ELEM_MAX_LEN_WSC), NULL, rsnGenerateWSCIE}
+	,			/* 221 */
 #endif
 #if CFG_SUPPORT_WAPI
 	{(ELEM_HDR_LEN + ELEM_MAX_LEN_WAPI), NULL, wapiGenerateWAPIIE}
-	,			/* Assoc IE Order: None (China's Spec, WLAN Authentication and Privacy Infrastructure) */
-#endif
-#if CFG_SUPPORT_WPS2
-	{(ELEM_HDR_LEN + ELEM_MAX_LEN_WSC), NULL, rsnGenerateWSCIE}
-	,			/* Assoc IE Order: Last, Element ID: 221 (Vendor Specific)*/
+	,			/* 68 */
 #endif
 #if CFG_SUPPORT_PASSPOINT
+	{(ELEM_HDR_LEN + ELEM_MAX_LEN_INTERWORKING), NULL, hs20GenerateInterworkingIE}
+	,			/* 107 */
+	{(ELEM_HDR_LEN + ELEM_MAX_LEN_ROAMING_CONSORTIUM), NULL, hs20GenerateRoamingConsortiumIE}
+	,			/* 111 */
 	{(ELEM_HDR_LEN + ELEM_MAX_LEN_HS20_INDICATION), NULL, hs20GenerateHS20IE}
-	,			/* Assoc IE Order: Last, Element ID: 221 (Vendor Specific)*/
+	,			/* 221 */
 #endif /* CFG_SUPPORT_PASSPOINT */
+	{(ELEM_HDR_LEN + ELEM_MAX_LEN_EXT_CAP), NULL, rlmReqGenerateExtCapIE}
+	,			/* 127 */
 	{(ELEM_HDR_LEN + ELEM_MAX_LEN_WMM_INFO), NULL, mqmGenerateWmmInfoIE}
-	,			/* Assoc IE Order: Last, Element ID: 221 (Vendor Specific)*/
+	,			/* 221 */
+	{(ELEM_HDR_LEN + ELEM_MAX_LEN_RSN), NULL, rsnGenerateRSNIE}
+	,			/* 48 */
+#if CFG_SUPPORT_802_11AC
+	{(ELEM_HDR_LEN + ELEM_MAX_LEN_VHT_CAP), NULL, rlmReqGenerateVhtCapIE}
+	,			/*191 */
+	{(ELEM_HDR_LEN + ELEM_MAX_LEN_VHT_OP_MODE_NOTIFICATION), NULL, rlmReqGenerateVhtOpNotificationIE}
+	,			/*199 */
+#endif
 #if CFG_SUPPORT_MTK_SYNERGY
 	{(ELEM_HDR_LEN + ELEM_MIN_LEN_MTK_OUI), NULL, rlmGenerateMTKOuiIE}
-	,			/* Assoc IE Order: Last, Element ID: 221 (Vendor Specific)*/
+	,			/* 221 */
 #endif
-	{(ELEM_HDR_LEN + ELEM_MAX_LEN_WPA), NULL, rsnGenerateWPAIE}
-				/* Assoc IE Order: Last, Element ID: 221 (Vendor Specific)*/
+	{(ELEM_HDR_LEN + ELEM_MAX_LEN_WPA), NULL, rsnGenerateWPAIE}	/* 221 */
+	,
+#if CFG_SUPPORT_H2E
+	{0, rsnCalRSNXELen, rsnGenerateRSNXE}			/* 244 */
+#endif
 };
 
 #if CFG_SUPPORT_AAA
@@ -226,9 +221,7 @@ UINT_16 assocBuildCapabilityInfo(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prS
 	/* Set up our requested capabilities. */
 	u2CapInfo = CAP_INFO_ESS;
 	u2CapInfo |= CAP_CF_STA_NOT_POLLABLE;
-#if CFG_SUPPORT_802_11K
-	u2CapInfo |= CAP_INFO_RADIO_MEASUREMENT;
-#endif
+
 	if (prStaRec->u2CapInfo & CAP_INFO_PRIVACY)
 		u2CapInfo |= CAP_INFO_PRIVACY;
 
@@ -1302,7 +1295,7 @@ WLAN_STATUS assocProcessRxAssocReqFrame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T 
 	P_BSS_INFO_T prBssInfo;
 	P_IE_SSID_T prIeSsid = (P_IE_SSID_T) NULL;
 	P_RSN_INFO_ELEM_T prIeRsn = (P_RSN_INFO_ELEM_T) NULL;
-	P_IE_SUPPORTED_RATE_IOT_T prIeSupportedRate = (P_IE_SUPPORTED_RATE_IOT_T) NULL;
+	P_IE_SUPPORTED_RATE_T prIeSupportedRate = (P_IE_SUPPORTED_RATE_T) NULL;
 	P_IE_EXT_SUPPORTED_RATE_T prIeExtSupportedRate = (P_IE_EXT_SUPPORTED_RATE_T) NULL;
 	PUINT_8 pucIE, pucIEStart;
 	UINT_16 u2IELength;
@@ -1396,18 +1389,10 @@ WLAN_STATUS assocProcessRxAssocReqFrame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T 
 
 		case ELEM_ID_SUP_RATES:
 			if ((!prIeSupportedRate) && (IE_LEN(pucIE) <= RATE_NUM_SW))
-				prIeSupportedRate = SUP_RATES_IOT_IE(pucIE);
+				prIeSupportedRate = SUP_RATES_IE(pucIE);
 
 			break;
-		case ELEM_ID_PWR_CAP:
-			if (IE_LEN(pucIE) != ELEM_MAX_LEN_POWER_CAP)
-				return WLAN_STATUS_FAILURE;
-			break;
-		case ELEM_ID_SUP_CHS:
-			if ((IE_LEN(pucIE) > ELEM_MAX_LEN_SUPPORTED_CHANNELS)
-				|| (IE_LEN(pucIE) & 0x01))
-				return WLAN_STATUS_FAILURE;
-			break;
+
 		case ELEM_ID_EXTENDED_SUP_RATES:
 			if (!prIeExtSupportedRate)
 				prIeExtSupportedRate = EXT_SUP_RATES_IE(pucIE);
@@ -1424,10 +1409,6 @@ WLAN_STATUS assocProcessRxAssocReqFrame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T 
 			if (prAdapter->fgIsP2PRegistered && IS_STA_IN_P2P(prStaRec)) {
 				prIeRsn = RSN_IE(pucIE);
 				rsnParserCheckForRSNCCMPPSK(prAdapter, prIeRsn, prStaRec, &u2StatusCode);
-				if (u2StatusCode ==
-					STATUS_CODE_INVALID_INFO_ELEMENT) {
-					return WLAN_STATUS_FAILURE;
-				}
 				if (u2StatusCode != STATUS_CODE_SUCCESSFUL) {
 					*pu2StatusCode = u2StatusCode;
 					return WLAN_STATUS_SUCCESS;

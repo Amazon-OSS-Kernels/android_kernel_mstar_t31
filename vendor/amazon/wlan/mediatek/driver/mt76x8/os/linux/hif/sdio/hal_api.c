@@ -180,32 +180,6 @@ halRxWaitResponse(IN P_ADAPTER_T prAdapter, IN UINT_8 ucPortIdx, OUT PUINT_8 puc
 	u4Time = (UINT_32) kalGetTimeTick();
 
 	do {
-		HAL_MCR_RD(prAdapter, MCR_WHISR, &u4Value);
-		if (!(u4Value & (WHISR_RX0_DONE_INT | WHISR_RX1_DONE_INT))) {
-			/* timeout exceeding check */
-			u4Current = (UINT_32) kalGetTimeTick();
-
-			if ((u4Current > u4Time) && ((u4Current - u4Time)
-				> RX_RESPONSE_TIMEOUT)) {
-
-				DBGLOG(RX, ERROR, "Timeout! %d - %d = %d\n",
-				u4Current, u4Time, (u4Current-u4Time));
-				return WLAN_STATUS_FAILURE;
-			} else if (u4Current < u4Time &&
-				((u4Current + (0xFFFFFFFF - u4Time))
-				> RX_RESPONSE_TIMEOUT)) {
-
-				DBGLOG(RX, ERROR, "Timeout! %d - %d = %d\n",
-					u4Current, u4Time,
-					(u4Current + (0xFFFFFFFF - u4Time)));
-				return WLAN_STATUS_FAILURE;
-			}
-			/* Response packet is not ready */
-			kalUdelay(50);
-
-			continue;
-		}
-
 		/* Read the packet length */
 		HAL_MCR_RD(prAdapter, MCR_WRPLR, &u4Value);
 
@@ -218,8 +192,16 @@ halRxWaitResponse(IN P_ADAPTER_T prAdapter, IN UINT_8 ucPortIdx, OUT PUINT_8 puc
 		}
 
 		if (u4PktLen == 0) {
-			DBGLOG(RX, ERROR, "Packet length is 0!!\n");
-			return WLAN_STATUS_FAILURE;
+			/* timeout exceeding check */
+			u4Current = (UINT_32) kalGetTimeTick();
+
+			if ((u4Current > u4Time) && ((u4Current - u4Time) > RX_RESPONSE_TIMEOUT))
+				return WLAN_STATUS_FAILURE;
+			else if (u4Current < u4Time && ((u4Current + (0xFFFFFFFF - u4Time)) > RX_RESPONSE_TIMEOUT))
+				return WLAN_STATUS_FAILURE;
+
+			/* Response packet is not ready */
+			kalUdelay(50);
 		} else {
 
 #if (CFG_ENABLE_READ_EXTRA_4_BYTES == 1)
@@ -403,7 +385,7 @@ BOOLEAN halSetDriverOwn(IN P_ADAPTER_T prAdapter)
 				if (prAdapter->u4OwnFailedLogCount > LP_OWN_BACK_FAILED_RESET_CNT) {
 					/* Trigger RESET */
 #if CFG_CHIP_RESET_SUPPORT
-					GL_RESET_TRIGGER(prAdapter, RST_DRV_OWN_FAIL);
+					glResetTrigger(prAdapter);
 #endif
 				}
 				GET_CURRENT_SYSTIME(&prAdapter->rLastOwnFailedLogTime);
@@ -477,7 +459,7 @@ BOOLEAN halSetDriverOwn(IN P_ADAPTER_T prAdapter)
 				if (fgTimeout) {
 					/* Trigger RESET */
 #if CFG_CHIP_RESET_SUPPORT
-					GL_RESET_TRIGGER(prAdapter, RST_DRV_OWN_FAIL);
+					glResetTrigger(prAdapter);
 #endif
 				}
 
@@ -1959,7 +1941,7 @@ VOID halProcessSoftwareInterrupt(IN P_ADAPTER_T prAdapter)
 	if ((u4IntrBits & WHISR_D2H_SW_ASSERT_INFO_INT) != 0) {
 		halPrintFirmwareAssertInfo(prAdapter);
 #if CFG_CHIP_RESET_SUPPORT
-		GL_RESET_TRIGGER(prAdapter, RST_PROCESS_ABNORMAL_INT);
+		glResetTrigger(prAdapter);
 #endif
 	}
 
@@ -2018,17 +2000,7 @@ VOID halGetMailbox(IN P_ADAPTER_T prAdapter, IN UINT_32 u4MailboxNum, OUT PUINT_
 	}
 }
 
-/*----------------------------------------------------------------------------*/
-/*!
-* @brief process one prRxBuf. If there is not enough free SW_RFB, queue prRxBuf
-* back to rRxDeAggQue and schedule work again.
-*
-* @param prAdapter pointer to the Adapter handler, prRxBuf received buffer
-*
-* @return True if reschedule otherwise False
-*/
-/*----------------------------------------------------------------------------*/
-BOOLEAN halDeAggRxPktProc(P_ADAPTER_T prAdapter, P_SDIO_RX_COALESCING_BUF_T prRxBuf)
+VOID halDeAggRxPktProc(P_ADAPTER_T prAdapter, P_SDIO_RX_COALESCING_BUF_T prRxBuf)
 {
 	P_GL_HIF_INFO_T prHifInfo;
 	P_RX_CTRL_T prRxCtrl;
@@ -2074,7 +2046,7 @@ BOOLEAN halDeAggRxPktProc(P_ADAPTER_T prAdapter, P_SDIO_RX_COALESCING_BUF_T prRx
 		if ((prAdapter->prGlueInfo->ulFlag & GLUE_FLAG_HALT) == 0)
 			schedule_delayed_work(&prAdapter->prGlueInfo->rRxPktDeAggWork, 0);
 
-		return fgReschedule;
+		return;
 	}
 
 
@@ -2126,8 +2098,6 @@ BOOLEAN halDeAggRxPktProc(P_ADAPTER_T prAdapter, P_SDIO_RX_COALESCING_BUF_T prRx
 	mutex_lock(&prHifInfo->rRxFreeBufQueMutex);
 	QUEUE_INSERT_TAIL(&prHifInfo->rRxFreeBufQueue, (P_QUE_ENTRY_T)prRxBuf);
 	mutex_unlock(&prHifInfo->rRxFreeBufQueMutex);
-
-	return fgReschedule;
 }
 
 VOID halDeAggRxPktWorker(struct work_struct *work)
@@ -2137,7 +2107,6 @@ VOID halDeAggRxPktWorker(struct work_struct *work)
 	P_ADAPTER_T prAdapter;
 	P_SDIO_RX_COALESCING_BUF_T prRxBuf;
 	P_RX_CTRL_T prRxCtrl;
-	BOOLEAN bRescheduled = FALSE;
 
 	if (g_u4HaltFlag)
 		return;
@@ -2157,12 +2126,7 @@ VOID halDeAggRxPktWorker(struct work_struct *work)
 	mutex_unlock(&prHifInfo->rRxDeAggQueMutex);
 
 	while (prRxBuf) {
-		bRescheduled = halDeAggRxPktProc(prAdapter, prRxBuf);
-
-		if (bRescheduled) {
-			DBGLOG(RX, WARN, "halDeAggRxPktProc return rescheduled\n");
-			return;
-		}
+		halDeAggRxPktProc(prAdapter, prRxBuf);
 
 		if (prGlueInfo->ulFlag & GLUE_FLAG_HALT)
 			return;

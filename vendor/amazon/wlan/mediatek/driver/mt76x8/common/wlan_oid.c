@@ -2601,14 +2601,11 @@ wlanoidSetAddKey(IN P_ADAPTER_T prAdapter, IN PVOID pvSetBuffer, IN UINT_32 u4Se
 	DBGLOG(RSN, INFO, "cipher = %d keyid = %d keylen = %d\n", prCmdKey->ucAlgorithmId, prCmdKey->ucKeyId,
 	       prCmdKey->ucKeyLen);
 	DBGLOG_MEM8(RSN, INFO, prCmdKey->aucKeyMaterial, prCmdKey->ucKeyLen);
-	if (prCmdKey->ucKeyId < MAX_KEY_NUM) {
-		DBGLOG(RSN, INFO, "wepkeyUsed = %d\n", prBssInfo->wepkeyUsed[prCmdKey->ucKeyId]);
-		DBGLOG(RSN, INFO, "wepkeyWlanIdx = %d:", prBssInfo->wepkeyWlanIdx);
-		DBGLOG(RSN, INFO, "ucBMCWlanIndexSUsed = %d\n", prBssInfo->ucBMCWlanIndexSUsed[prCmdKey->ucKeyId]);
-		DBGLOG(RSN, INFO, "ucBMCWlanIndexS = %d:", prBssInfo->ucBMCWlanIndexS[prCmdKey->ucKeyId]);
-	} else {
-		DBGLOG(RSN, WARN, "ucKeyId(%d) oob(%d)", prCmdKey->ucKeyId, MAX_KEY_NUM);
-	}
+
+	DBGLOG(RSN, INFO, "wepkeyUsed = %d\n", prBssInfo->wepkeyUsed[prCmdKey->ucKeyId]);
+	DBGLOG(RSN, INFO, "wepkeyWlanIdx = %d:", prBssInfo->wepkeyWlanIdx);
+	DBGLOG(RSN, INFO, "ucBMCWlanIndexSUsed = %d\n", prBssInfo->ucBMCWlanIndexSUsed[prCmdKey->ucKeyId]);
+	DBGLOG(RSN, INFO, "ucBMCWlanIndexS = %d:", prBssInfo->ucBMCWlanIndexS[prCmdKey->ucKeyId]);
 #endif
 
 	/* insert into prCmdQueue */
@@ -6333,11 +6330,6 @@ wlanoidSetSwCtrlWrite(IN P_ADAPTER_T prAdapter,
 		ucChannelWidth = (UINT_8)((u4Data & BITS(4, 7)) >> 4);
 		ucBssIndex = (UINT_8) u2SubId;
 
-		if (!IS_BSS_INDEX_VALID(ucBssIndex)) {
-			DBGLOG(RLM, ERROR, "Invalid bssidx:%d\n", ucBssIndex);
-			break;
-		}
-
 		/* ucChannelWidth 0:20MHz, 1:40MHz, 2:80MHz, 3:160MHz 4:80+80MHz */
 		DBGLOG(REQ, INFO, "Change BSS[%d] OpMode to BW[%d] Nss[%d]\n",
 			ucBssIndex, ucChannelWidth, ucNss);
@@ -6729,11 +6721,7 @@ wlanoidSetKeyCfg(IN P_ADAPTER_T prAdapter, IN PVOID pvSetBuffer, IN UINT_32 u4Se
 
 	wlanInitFeatureOption(prAdapter);
 #if CFG_SUPPORT_EASY_DEBUG
-#if CFG_SUPPORT_SEND_ONLY_ONE_CFG
-	wlanFeatureToFwOnlyOneCfg(prAdapter, prKeyCfgInfo->aucKey, prKeyCfgInfo->aucValue);
-#else
 	wlanFeatureToFw(prAdapter);
-#endif
 #endif
 
 	return rWlanStatus;
@@ -11976,10 +11964,6 @@ wlanoidAdvCtrl(IN P_ADAPTER_T prAdapter,
 		len = sizeof(struct CMD_ADMIN_CTRL_CONFIG);
 		break;
 #endif
-	case CMD_GET_MAGIC_PKT_INFO_TYPE:
-		*pu4QueryInfoLen = sizeof(CMD_GET_MAGIC_PKT_INFO_T);
-		len = sizeof(CMD_GET_MAGIC_PKT_INFO_T);
-		break;
 	default:
 		return WLAN_STATUS_INVALID_LENGTH;
 	}
@@ -12232,49 +12216,6 @@ wlanoidSetFwLog2Host(
 				sizeof(CMD_FW_LOG_2_HOST_CTRL_T),
 				(PUINT_8)prFwLog2HostCtrl, pvSetBuffer, u4SetBufferLen);
 }
-
-#if CFG_STR_DHCP_RENEW_OFFLOAD
-WLAN_STATUS
-wlanoidSetDhcpOffladInfo(
-		IN P_ADAPTER_T prAdapter,
-		IN PVOID pvSetBuffer,
-		IN UINT_32 u4SetBufferLen,
-		OUT PUINT_32 pu4SetInfoLen)
-{
-	P_CMD_DHCP_OFFLOAD_SETTING_T prDhcpOffloadCmd;
-
-	if (!prAdapter || !pvSetBuffer)
-		return WLAN_STATUS_INVALID_DATA;
-
-	prDhcpOffloadCmd = (P_CMD_DHCP_OFFLOAD_SETTING_T)pvSetBuffer;
-
-	DBGLOG(REQ, STATE,
-		"DHCP renew info set to FW Server IP: [%d.%d.%d.%d] Lease Time: %d seconds\n",
-		prDhcpOffloadCmd->aucDhcpServerIpAddr[0],
-		prDhcpOffloadCmd->aucDhcpServerIpAddr[1],
-		prDhcpOffloadCmd->aucDhcpServerIpAddr[2],
-		prDhcpOffloadCmd->aucDhcpServerIpAddr[3],
-		prDhcpOffloadCmd->u4RenewIntv);
-
-	DBGLOG(REQ, STATE,
-		"DHCP renew offload Enable:%d, Suspend:%d, BssIdx:%d\n",
-		prDhcpOffloadCmd->ucEnableOffload,
-		prDhcpOffloadCmd->ucSuspend,
-		prDhcpOffloadCmd->ucBssIndex);
-
-	return wlanSendSetQueryCmd(prAdapter,
-					CMD_ID_SET_DHCP_RENEW_OFFLOAD,
-					TRUE,
-					FALSE,
-					TRUE,
-					nicCmdEventSetCommon,
-					nicOidCmdTimeoutCommon,
-					sizeof(CMD_DHCP_OFFLOAD_SETTING_T),
-					(PUINT_8)prDhcpOffloadCmd,
-					NULL,
-					0);
-}
-#endif
 
 WLAN_STATUS
 wlanoidNotifyFwSuspend(
@@ -12810,15 +12751,10 @@ wlanSuspendLinkDown(IN P_GLUE_INFO_T prGlueInfo)
 
 	prAisFsmInfo = &(prGlueInfo->prAdapter->rWifiVar.rAisFsmInfo);
 
-	aisFsmStateAbort_SCAN(prGlueInfo->prAdapter);
-
 	/* 1) wifi cfg "Wow" must be true, 2) wow is disable 3) WIfI connected => execute link down flow */
 	if (prGlueInfo->prAdapter->rWifiVar.ucWow && !prGlueInfo->prAdapter->rWowCtrl.fgWowEnable) {
 		if (kalGetMediaStateIndicated(prGlueInfo) == PARAM_MEDIA_STATE_CONNECTED ||
 			prAisFsmInfo->eCurrentState == AIS_STATE_DISCONNECTING) {
-
-			/* Only flush all pending AIS Reqs for suspend linkdown */
-			aisFsmFlushRequest(prGlueInfo->prAdapter);
 
 			DBGLOG(REQ, STATE, "Suspend link down\n");
 			rStatus = kalIoctl(prGlueInfo, wlanoidLinkDown, NULL, 0, TRUE, FALSE, FALSE, &u4BufLen);
@@ -12829,221 +12765,3 @@ wlanSuspendLinkDown(IN P_GLUE_INFO_T prGlueInfo)
 
 	return rStatus;
 }
-/*
- * This func is mainly from bionic's strtok.c
- */
-
-#if CFG_SUPPORT_802_11V_BSS_TRANSITION_MGT
-static PINT_8 strtok_r(PINT_8 s, const PINT_8 delim, INT_8 **last)
-{
-	char *spanp;
-	int c, sc;
-	char *tok;
-
-	if (s == NULL) {
-		s = *last;
-		if (s == 0)
-			return NULL;
-	}
-cont:
-	c = *s++;
-	for (spanp = (char *)delim; (sc = *spanp++) != 0;) {
-		if (c == sc)
-			goto cont;
-	}
-
-	if (c == 0) {		/* no non-delimiter characters */
-		*last = NULL;
-		return NULL;
-	}
-	tok = s - 1;
-
-	for (;;) {
-		c = *s++;
-		spanp = (char *)delim;
-		do {
-			sc = *spanp++;
-			if (sc == c) {
-				if (c == 0)
-					s = NULL;
-				else
-					s[-1] = 0;
-				*last = s;
-				return tok;
-			}
-		} while (sc != 0);
-	}
-}
-#endif
-
-#if CFG_SUPPORT_802_11K
-WLAN_STATUS wlanoidSendNeighborRequest(IN P_ADAPTER_T prAdapter,
-				    IN PVOID pvSetBuffer, UINT_32 u4SetBufferLen,
-				    PUINT_32 pu4SetInfoLen)
-{
-	struct SUB_ELEMENT_LIST *prSSIDIE = NULL;
-	P_BSS_INFO_T prAisBssInfo = NULL;
-	UINT_8 ucSSIDIELen = 0;
-	PUINT_8 pucSSID = (PUINT_8)pvSetBuffer;
-
-	if (!prAdapter || !prAdapter->prAisBssInfo)
-		return WLAN_STATUS_INVALID_DATA;
-	prAisBssInfo = prAdapter->prAisBssInfo;
-	if (prAisBssInfo->eConnectionState != PARAM_MEDIA_STATE_CONNECTED) {
-		DBGLOG(OID, ERROR, "didn't connected any Access Point\n");
-		return WLAN_STATUS_FAILURE;
-	}
-	if (u4SetBufferLen == 0 || !pucSSID) {
-		rlmTxNeighborReportRequest(prAdapter,
-					   prAisBssInfo->prStaRecOfAP, NULL);
-		return WLAN_STATUS_SUCCESS;
-	}
-
-	ucSSIDIELen = (UINT_8)(u4SetBufferLen + sizeof(*prSSIDIE));
-	prSSIDIE = kalMemAlloc(ucSSIDIELen, PHY_MEM_TYPE);
-	if (!prSSIDIE) {
-		DBGLOG(OID, ERROR, "No Memory\n");
-		return WLAN_STATUS_FAILURE;
-	}
-	prSSIDIE->prNext = NULL;
-	prSSIDIE->rSubIE.ucSubID = ELEM_ID_SSID;
-	prSSIDIE->rSubIE.ucLength = (UINT_8)u4SetBufferLen;
-	kalMemCopy(&prSSIDIE->rSubIE.aucOptInfo[0], pucSSID,
-		   (UINT_8)u4SetBufferLen);
-	DBGLOG(OID, INFO, "Send Neighbor Request, SSID=%s\n", pucSSID);
-	rlmTxNeighborReportRequest(prAdapter, prAisBssInfo->prStaRecOfAP,
-				   prSSIDIE);
-	kalMemFree(prSSIDIE, PHY_MEM_TYPE, ucSSIDIELen);
-	return WLAN_STATUS_SUCCESS;
-}
-#endif
-#if CFG_SUPPORT_802_11V_BSS_TRANSITION_MGT
-WLAN_STATUS wlanoidSendBTMQuery(IN P_ADAPTER_T prAdapter, IN PVOID pvSetBuffer,
-			     UINT_32 u4SetBufferLen, PUINT_32 pu4SetInfoLen)
-{
-	P_STA_RECORD_T prStaRec = NULL;
-	P_BSS_TRANSITION_MGT_PARAM_T prBtmMgt = NULL;
-	UINT_8 uReason = 0;
-	UINT_8 *cReason = (UINT_8 *)pvSetBuffer;
-
-	if (!prAdapter->prAisBssInfo ||
-	    prAdapter->prAisBssInfo->eConnectionState !=
-		PARAM_MEDIA_STATE_CONNECTED) {
-		DBGLOG(OID, INFO, "Not connected yet\n");
-		return WLAN_STATUS_FAILURE;
-	}
-	prStaRec = prAdapter->prAisBssInfo->prStaRecOfAP;
-	if (!prStaRec || !prStaRec->fgSupportBTM) {
-		DBGLOG(OID, INFO,
-		       "Target BSS(%p) didn't support Bss Transition Management\n",
-		       prStaRec);
-		return WLAN_STATUS_FAILURE;
-	}
-
-	if (cReason != NULL) {
-		while (*cReason >= '0' && *cReason <= '9') {
-			uReason = uReason * 10;
-			uReason += *cReason - 48;
-			cReason++;
-		}
-	}
-
-	prBtmMgt = &prAdapter->rWifiVar.rAisSpecificBssInfo.rBTMParam;
-	prBtmMgt->ucDialogToken = wnmGetBtmToken();
-	prBtmMgt->ucQueryReason = pvSetBuffer ? uReason
-					      : BSS_TRANSITION_LOW_RSSI;
-	DBGLOG(OID, INFO, "Send BssTransitionManagementQuery, Reason %d\n",
-	       prBtmMgt->ucQueryReason);
-	wnmSendBTMQueryFrame(prAdapter, prStaRec);
-	return WLAN_STATUS_SUCCESS;
-}
-
-/* It's a Integretion Test function for RadioMeasurement. If you found errors
-** during doing Radio Measurement,
-** you can run this IT function with iwpriv wlan0 driver \"RM-IT
-** xx,xx,xx, xx\"
-** xx,xx,xx,xx is the RM request frame data
-*/
-
-WLAN_STATUS wlanoidPktProcessIT(IN P_ADAPTER_T prAdapter, IN PVOID pvBuffer,
-			     UINT_32 u4BufferLen, PUINT_32 pu4InfoLen)
-{
-	SW_RFB_T rSwRfb;
-	static UINT_8 aucPacket[200] = {0,};
-	PUINT_8 pucSavedPtr = (PUINT_8)pvBuffer;
-	PUINT_8 pucItem = NULL;
-	UINT_8 j = 0;
-	INT_8 i = 0;
-	UINT_8 ucByte;
-	BOOLEAN fgBTMReq = FALSE;
-	void (*process_func)(P_ADAPTER_T prAdapter,
-			     P_SW_RFB_T prSwRfb);
-
-	if (!pvBuffer) {
-		DBGLOG(OID, ERROR, "pvBuffer is NULL\n");
-		return WLAN_STATUS_FAILURE;
-	}
-
-	if (!strnicmp(pucSavedPtr, "BTM-IT ", 7)) {
-		process_func = wnmRecvBTMRequest;
-		pucSavedPtr += 7;
-		fgBTMReq = TRUE;
-	} else {
-		pucSavedPtr[10] = 0;
-		DBGLOG(OID, ERROR, "IT type %s is not supported\n",
-		       pucSavedPtr);
-		return WLAN_STATUS_NOT_SUPPORTED;
-	}
-	kalMemZero(aucPacket, sizeof(aucPacket));
-	pucItem = strtok_r(pucSavedPtr, ",", (PPINT_8)&pucSavedPtr);
-	while (pucItem) {
-		ucByte = *pucItem;
-		i = 0;
-		while (ucByte) {
-			if (i > 1) {
-				DBGLOG(OID, ERROR,
-				       "more than 2 char for one byte\n");
-				return WLAN_STATUS_FAILURE;
-			} else if (i == 1)
-				aucPacket[j] <<= 4;
-			if (ucByte >= '0' && ucByte <= '9')
-				aucPacket[j] |= ucByte - '0';
-			else if (ucByte >= 'a' && ucByte <= 'f')
-				aucPacket[j] |= ucByte - 'a' + 10;
-			else if (ucByte >= 'A' && ucByte <= 'F')
-				aucPacket[j] |= ucByte - 'A' + 10;
-			else {
-				DBGLOG(OID, ERROR, "not a hex char %c\n",
-				       ucByte);
-				return WLAN_STATUS_FAILURE;
-			}
-			ucByte = *(++pucItem);
-			i++;
-		}
-		j++;
-		pucItem = strtok_r(NULL, ",", (PPINT_8)&pucSavedPtr);
-	}
-	DBGLOG(OID, INFO, "Dump IT packet, len %d\n", j);
-	dumpMemory8(aucPacket, j);
-	if (j < WLAN_MAC_MGMT_HEADER_LEN) {
-		DBGLOG(OID, ERROR, "packet length %d less than mac header 24\n",
-		       j);
-		return WLAN_STATUS_FAILURE;
-	}
-	rSwRfb.pvHeader = (void *)&aucPacket[0];
-	rSwRfb.u2PacketLen = j;
-	rSwRfb.u2HeaderLen = WLAN_MAC_MGMT_HEADER_LEN;
-	rSwRfb.ucStaRecIdx = KAL_NETWORK_TYPE_AIS_INDEX;
-	if (fgBTMReq) {
-		HW_MAC_RX_DESC_T rRxStatus;
-
-		rSwRfb.prRxStatus = (P_HW_MAC_RX_DESC_T)&rRxStatus;
-		rSwRfb.prRxStatus->ucChanFreq = 6;
-		wnmWNMAction(prAdapter, &rSwRfb);
-	} else {
-		process_func(prAdapter, &rSwRfb);
-	}
-
-	return WLAN_STATUS_SUCCESS;
-}
-#endif

@@ -824,10 +824,6 @@ static VOID rlmFillExtCapIE(P_ADAPTER_T prAdapter, P_BSS_INFO_T prBssInfo, P_MSD
 	if (prBssInfo->eCurrentOPMode != OP_MODE_INFRASTRUCTURE)
 		prExtCap->aucCapabilities[0] &= ~ELEM_EXT_CAP_PSMP_CAP;
 
-#if CFG_SUPPORT_802_11V_BSS_TRANSITION_MGT
-	SET_EXT_CAP(prExtCap->aucCapabilities, ELEM_MAX_LEN_EXT_CAP, ELEM_EXT_CAP_BSS_TRANSITION_BIT);
-#endif
-
 	prStaRec = cnmGetStaRecByIndex(prAdapter, prMsduInfo->ucStaRecIndex);
 
 #if CFG_SUPPORT_802_11AC
@@ -866,12 +862,6 @@ static VOID rlmFillExtCapIE(P_ADAPTER_T prAdapter, P_BSS_INFO_T prBssInfo, P_MSD
 		SET_EXT_CAP(prExtCap->aucCapabilities, ELEM_MAX_LEN_EXT_CAP, ELEM_EXT_CAP_WNM_NOTIFICATION_BIT);
 	}
 #endif /* CFG_SUPPORT_PASSPOINT */
-
-#if CFG_SUPPORT_802_11V_BSS_TRANSITION_MGT
-	prExtCap->ucLength = ELEM_MAX_LEN_EXT_CAP;
-	SET_EXT_CAP(prExtCap->aucCapabilities, ELEM_MAX_LEN_EXT_CAP,
-				ELEM_EXT_CAP_BSS_TRANSITION_BIT);
-#endif /* CFG_SUPPORT_802_11V_BSS_TRANSITION_MGT */
 
 	ASSERT(IE_SIZE(prExtCap) <= (ELEM_HDR_LEN + ELEM_MAX_LEN_EXT_CAP));
 
@@ -1075,14 +1065,6 @@ VOID rlmReqGenerateVhtOpNotificationIE(P_ADAPTER_T prAdapter, P_MSDU_INFO_T prMs
 
 	prBssInfo = prAdapter->aprBssInfo[prMsduInfo->ucBssIndex];
 	if (!prBssInfo)
-		return;
-
-	/* [TGac 5.2.46 STBC Receive Test with UCC 9.2.x]
-	 * Operating Notification IE of Nss=2 will make Ralink testbed send data
-	 * frames without STBC
-	 * Enable the Operating Notification IE only for DBDC enable case.
-	 */
-	if (!prAdapter->rWifiVar.fgDbDcModeEn)
 		return;
 
 	prStaRec = cnmGetStaRecByIndex(prAdapter, prMsduInfo->ucStaRecIndex);
@@ -2157,7 +2139,7 @@ static UINT_8 rlmRecIeInfoForClient(P_ADAPTER_T prAdapter, P_BSS_INFO_T prBssInf
 			prCSAParams->ucVhtBw = prWideBandChannelIE->ucNewChannelWidth;
 			prCSAParams->ucVhtS1  = prWideBandChannelIE->ucChannelS1;
 			prCSAParams->ucVhtS2  = prWideBandChannelIE->ucChannelS2;
-			DBGLOG(RLM, STATE,
+			DBGLOG(RLM, INFO,
 			       "[Ch] BW=%d, s1=%d, s2=%d\n", prCSAParams->ucVhtBw, prCSAParams->ucVhtS1,
 			       prCSAParams->ucVhtS2);
 			break;
@@ -2225,9 +2207,10 @@ static UINT_8 rlmRecIeInfoForClient(P_ADAPTER_T prAdapter, P_BSS_INFO_T prBssInf
 			}
 
 #if CFG_DFS_NEWCH_DFS_FORCE_DISCONNECT
+			i = rlmDomainGetActiveChannelCount(KAL_BAND_2GHZ);
 			max_count = rlmDomainGetActiveChannelCount(KAL_BAND_5GHZ) +
 							rlmDomainGetActiveChannelCount(KAL_BAND_2GHZ);
-			for (i = 0; i < max_count; i++) {
+			for (; i < max_count; i++) {
 				Channel = rlmDomainGetActiveChannels() + i;
 
 				if (Channel->chNum != prCSAIE->ucNewChannelNum) {
@@ -2242,10 +2225,8 @@ static UINT_8 rlmRecIeInfoForClient(P_ADAPTER_T prAdapter, P_BSS_INFO_T prBssInf
 			if ((Channel) && (Channel->flags & IEEE80211_CHAN_RADAR)) {
 				prCSAParams->fgBeaconNewChannelIsDFS = TRUE;
 				DBGLOG(RLM, INFO, "[DFS][CSA][CLIENT] New channel is DFS channel!");
-			} else if (!Channel) {
-				prCSAParams->fgNewChannelIsDisabled = TRUE;
-				DBGLOG(RLM, INFO, "[DFS][CSA][CLIENT] New channel is un-supported channel!");
-			} else
+			}
+			else
 				DBGLOG(RLM, INFO, "[DFS][CSA][CLIENT] New channel is non-DFS channel!");
 #endif
 			break;
@@ -2389,16 +2370,6 @@ static UINT_8 rlmRecIeInfoForClient(P_ADAPTER_T prAdapter, P_BSS_INFO_T prBssInf
 	rlmRevisePreferBandwidthNss(prAdapter, prBssInfo->ucBssIndex, prStaRec);
 
 	/*printk("Modify ChannelWidth (%d) and Extend (%d)\n",prBssInfo->eBssSCO,prBssInfo->ucVhtChannelWidth);*/
-
-	/* Revise and align S1 to primary channel */
-	if (prBssInfo->ucVhtChannelFrequencyS1 != nicGetVhtS1(
-			prBssInfo->ucPrimaryChannel, prBssInfo->ucVhtChannelWidth)) {
-		DBGLOG(RLM, STATE, "Revise BSS %d Ch=%d BW=%d S1=%d\n",
-		       prBssInfo->ucBssIndex,
-		       prBssInfo->ucPrimaryChannel,
-		       prBssInfo->ucVhtChannelWidth,
-		       prBssInfo->ucVhtChannelFrequencyS1);
-	}
 
 	if (!rlmDomainIsValidRfSetting(prAdapter, prBssInfo->eBand,
 				       prBssInfo->ucPrimaryChannel, prBssInfo->eBssSCO,
@@ -3020,7 +2991,7 @@ VOID rlmFillSyncCmdParam(P_CMD_SET_BSS_RLM_PARAM_T prCmdBody, P_BSS_INFO_T prBss
 	prCmdBody->ucNss = prBssInfo->ucNss;
 
 	if (RLM_NET_PARAM_VALID(prBssInfo)) {
-		DBGLOG(RLM, WARN, "N=%d b=%d c=%d s=%d e=%d h=%d I=0x%02x l=%d p=%d w=%d s1=%d s2=%d n=%d\n",
+		DBGLOG(RLM, INFO, "N=%d b=%d c=%d s=%d e=%d h=%d I=0x%02x l=%d p=%d w=%d s1=%d s2=%d n=%d\n",
 		       prCmdBody->ucBssIndex, prCmdBody->ucRfBand,
 		       prCmdBody->ucPrimaryChannel, prCmdBody->ucRfSco,
 		       prCmdBody->ucErpProtectMode, prCmdBody->ucHtProtectMode,
@@ -3030,7 +3001,7 @@ VOID rlmFillSyncCmdParam(P_CMD_SET_BSS_RLM_PARAM_T prCmdBody, P_BSS_INFO_T prBss
 		       prCmdBody->ucVhtChannelFrequencyS1, prCmdBody->ucVhtChannelFrequencyS2,
 		       prCmdBody->ucNss);
 	} else {
-		DBGLOG(RLM, STATE, "N=%d closed\n", prCmdBody->ucBssIndex);
+		DBGLOG(RLM, INFO, "N=%d closed\n", prCmdBody->ucBssIndex);
 	}
 }
 
@@ -3827,8 +3798,6 @@ VOID rlmProcessSpecMgtAction(P_ADAPTER_T prAdapter, P_SW_RFB_T prSwRfb)
 				prCSAParams->ucVhtBw = prWideBandChannelIE->ucNewChannelWidth;
 				prCSAParams->ucVhtS1 = prWideBandChannelIE->ucChannelS1;
 				prCSAParams->ucVhtS2 = prWideBandChannelIE->ucChannelS2;
-				DBGLOG(RLM, STATE, "[CSA Mgt] ACT BW=%d, s1=%d, s2=%d\n",
-					prCSAParams->ucVhtBw, prCSAParams->ucVhtS1,	prCSAParams->ucVhtS2);
 				break;
 
 			case ELEM_ID_CH_SW_ANNOUNCEMENT:
@@ -3839,7 +3808,7 @@ VOID rlmProcessSpecMgtAction(P_ADAPTER_T prAdapter, P_SW_RFB_T prSwRfb)
 
 				prChannelSwitchAnnounceIE = (P_IE_CHANNEL_SWITCH_T) pucIE;
 
-				DBGLOG(RLM, STATE,
+				DBGLOG(RLM, INFO,
 					"[CSA Mgt] switch channel [%d]->[%d]\n",
 					prBssInfo->ucPrimaryChannel,
 					prChannelSwitchAnnounceIE
@@ -3869,9 +3838,10 @@ VOID rlmProcessSpecMgtAction(P_ADAPTER_T prAdapter, P_SW_RFB_T prSwRfb)
 				}
 
 #if CFG_DFS_NEWCH_DFS_FORCE_DISCONNECT
+				i = rlmDomainGetActiveChannelCount(KAL_BAND_2GHZ);
 				max_count = rlmDomainGetActiveChannelCount(KAL_BAND_5GHZ) +
 								rlmDomainGetActiveChannelCount(KAL_BAND_2GHZ);
-				for (i = 0; i < max_count; i++) {
+				for (; i < max_count; i++) {
 					Channel = rlmDomainGetActiveChannels() + i;
 
 					if (Channel->chNum != prChannelSwitchAnnounceIE->ucNewChannelNum) {
@@ -3886,10 +3856,8 @@ VOID rlmProcessSpecMgtAction(P_ADAPTER_T prAdapter, P_SW_RFB_T prSwRfb)
 				if ((Channel) && (Channel->flags & IEEE80211_CHAN_RADAR)) {
 					prCSAParams->fgBeaconNewChannelIsDFS = TRUE;
 					DBGLOG(RLM, INFO, "[DFS][CSA][CLIENT] New channel is DFS channel!");
-				} else if (!Channel) {
-					prCSAParams->fgNewChannelIsDisabled = TRUE;
-					DBGLOG(RLM, INFO, "[DFS][CSA][CLIENT] New channel is un-supported channel!");
-				} else
+				}
+				else
 					DBGLOG(RLM, INFO, "[DFS][CSA][CLIENT] New channel is non-DFS channel!");
 #endif
 				break;
@@ -4032,7 +4000,6 @@ VOID rlmResetCSAParams(P_BSS_INFO_T prBssInfo)
 	prCSAParams->ucCsaCount = MAX_CSA_COUNT;
 	prCSAParams->fgBeaconNewChannelIsDFS = FALSE;
 	prCSAParams->fgActionNewChannelIsDFS = FALSE;
-	prCSAParams->fgNewChannelIsDisabled = FALSE;
 	DBGLOG(RLM, INFO, "Reset CSA count to %u for BSS%d",
 	       prCSAParams->ucCsaCount, prBssInfo->ucBssIndex);
 	prBssInfo->fgHasStopTx = FALSE;
@@ -4061,19 +4028,6 @@ VOID rlmCsaTimeout(IN P_ADAPTER_T prAdapter,
 	}
 
 	prCSAParams = &prBssInfo->CSAParams;
-
-	DBGLOG(RLM, EVENT, "[CSA] CSA timeout and prepare to switch to new channel(%d)\n",
-		prCSAParams->ucCsaNewCh);
-
-	if (prCSAParams->fgNewChannelIsDisabled) {
-		prCSAParams->fgNewChannelIsDisabled = FALSE;
-		/* do aisBSSlinkdown directly here without sending CSA notification */
-		DBGLOG(RLM, EVENT, "[CSA] Disconnect with the AP due to the new channel is un-supported\n");
-		aisBssLinkDown(prAdapter);
-		rlmResetCSAParams(prBssInfo);
-		return;
-	}
-
 	prBssInfo->ucPrimaryChannel = prCSAParams->ucCsaNewCh;
 	prBssInfo->eBand = (prCSAParams->ucCsaNewCh <= 14) ? BAND_2G4 : BAND_5G;
 
@@ -4145,16 +4099,6 @@ VOID rlmCsaTimeout(IN P_ADAPTER_T prAdapter,
 
 	rlmRevisePreferBandwidthNss(prAdapter, prBssInfo->ucBssIndex, prStaRec);
 
-	/* Revise and align S1 to primary channel */
-	if (prBssInfo->ucVhtChannelFrequencyS1 != nicGetVhtS1(
-			prBssInfo->ucPrimaryChannel, prBssInfo->ucVhtChannelWidth)) {
-		DBGLOG(RLM, STATE, "DFS:Revise BSS %d Ch=%d BW=%d S1=%d\n",
-		       prBssInfo->ucBssIndex,
-		       prBssInfo->ucPrimaryChannel,
-		       prBssInfo->ucVhtChannelWidth,
-		       prBssInfo->ucVhtChannelFrequencyS1);
-	}
-
 	if (!rlmDomainIsValidRfSetting(
 		    prAdapter, prBssInfo->eBand, prBssInfo->ucPrimaryChannel,
 		    prBssInfo->eBssSCO, prBssInfo->ucVhtChannelWidth,
@@ -4167,12 +4111,9 @@ VOID rlmCsaTimeout(IN P_ADAPTER_T prAdapter,
 		prBssInfo->ucHtOpInfo1 &=
 			~(HT_OP_INFO1_SCO | HT_OP_INFO1_STA_CHNL_WIDTH);
 
-#if (!CFG_SUPPORT_DBDC_TC6)
 		/* Check SAP channel */
 		p2pFuncSwitchSapChannel(prAdapter);
-#else
-		DBGLOG(RLM, EVENT, "[CSA] Bypass SAP channel switch triggered by driver\n");
-#endif
+
 	}
 
 	rlmSyncOperationParams(prAdapter, prBssInfo);
@@ -4184,12 +4125,11 @@ VOID rlmCsaTimeout(IN P_ADAPTER_T prAdapter,
 		prCSAParams->fgActionNewChannelIsDFS = FALSE;
 		aisBssLinkDown(prAdapter);
 	}
-	else
-#endif
-	{
+	else{
 		qmUpdateStaRec(prAdapter, prStaRec);
-		DBGLOG(RLM, EVENT, "[CSA] TxAllowed = %d\n", prStaRec->fgIsTxAllowed);
+		DBGLOG(RLM, EVENT, "[CSA] TxAllowed = TRUE\n");
 	}
+#endif
 
 	rlmResetCSAParams(prBssInfo);
 }
@@ -4602,116 +4542,6 @@ BOOLEAN rlmChangeOperationMode(P_ADAPTER_T prAdapter, UINT_8 ucBssIndex, UINT_8 
 	}
 	return TRUE;
 }
-
-#if CFG_SUPPORT_802_11K
-VOID rlmReqGenerateRRMEnabledCapIE(P_ADAPTER_T prAdapter,
-				P_MSDU_INFO_T prMsduInfo)
-{
-	P_IE_RRM_ENABLED_CAP_T prRrmEnabledCap = NULL;
-
-	ASSERT(prAdapter);
-	ASSERT(prMsduInfo);
-
-	prRrmEnabledCap =
-		(P_IE_RRM_ENABLED_CAP_T)(((UINT_8 *)
-						       prMsduInfo->prPacket) +
-					      prMsduInfo->u2FrameLength);
-	prRrmEnabledCap->ucId = ELEM_ID_RRM_ENABLED_CAP;
-	prRrmEnabledCap->ucLength = ELEM_MAX_LEN_RRM_CAP;
-	kalMemZero(&prRrmEnabledCap->aucCap[0], ELEM_MAX_LEN_RRM_CAP);
-	rlmFillRrmCapa(&prRrmEnabledCap->aucCap[0]);
-	prMsduInfo->u2FrameLength += IE_SIZE(prRrmEnabledCap);
-}
-
-VOID rlmFillRrmCapa(PUINT_8 pucCapa)
-{
-	UINT_8 ucIndex = 0;
-	UINT_8 aucEnabledBits[] = {RRM_CAP_INFO_LINK_MEASURE_BIT,
-				    RRM_CAP_INFO_NEIGHBOR_REPORT_BIT,
-				    RRM_CAP_INFO_REPEATED_MEASUREMENT,
-				    RRM_CAP_INFO_BEACON_PASSIVE_MEASURE_BIT,
-				    RRM_CAP_INFO_BEACON_ACTIVE_MEASURE_BIT,
-				    RRM_CAP_INFO_BEACON_TABLE_BIT,
-				    RRM_CAP_INFO_RRM_BIT};
-
-	for (; ucIndex < sizeof(aucEnabledBits); ucIndex++)
-		SET_EXT_CAP(pucCapa, ELEM_MAX_LEN_RRM_CAP,
-			    aucEnabledBits[ucIndex]);
-}
-
-VOID rlmTxNeighborReportRequest(P_ADAPTER_T prAdapter,
-				P_STA_RECORD_T prStaRec,
-				struct SUB_ELEMENT_LIST *prSubIEs)
-{
-	static UINT_8 ucDialogToken = 1;
-	P_MSDU_INFO_T prMsduInfo = NULL;
-	P_BSS_INFO_T prBssInfo = NULL;
-	UINT_8 *pucPayload = NULL;
-	P_ACTION_NEIGHBOR_REPORT_FRAME_T prTxFrame = NULL;
-	UINT_16 u2TxFrameLen = 500;
-	UINT_16 u2FrameLen = 0;
-
-	if (!prStaRec)
-		return;
-
-	prBssInfo = GET_BSS_INFO_BY_INDEX(prAdapter, prStaRec->ucBssIndex);
-	ASSERT(prBssInfo);
-	/* 1 Allocate MSDU Info */
-	prMsduInfo = (P_MSDU_INFO_T)cnmMgtPktAlloc(
-		prAdapter, MAC_TX_RESERVED_FIELD + u2TxFrameLen);
-	if (!prMsduInfo)
-		return;
-	prTxFrame = (ACTION_NEIGHBOR_REPORT_FRAME_T
-			     *)((unsigned long)(prMsduInfo->prPacket) +
-				MAC_TX_RESERVED_FIELD);
-
-	/* 2 Compose The Mac Header. */
-	prTxFrame->u2FrameCtrl = MAC_FRAME_ACTION;
-	COPY_MAC_ADDR(prTxFrame->aucDestAddr, prStaRec->aucMacAddr);
-	COPY_MAC_ADDR(prTxFrame->aucSrcAddr, prBssInfo->aucOwnMacAddr);
-	COPY_MAC_ADDR(prTxFrame->aucBSSID, prBssInfo->aucBSSID);
-	prTxFrame->ucCategory = CATEGORY_RM_ACTION;
-	prTxFrame->ucAction = ACTION_NEIGHBOR_REPORT_REQ;
-	u2FrameLen =
-		OFFSET_OF(ACTION_NEIGHBOR_REPORT_FRAME_T, aucInfoElem);
-	/* 3 Compose the frame body's frame. */
-	prTxFrame->ucDialogToken = ucDialogToken++;
-	u2TxFrameLen -= sizeof(*prTxFrame) - 1;
-	pucPayload = &prTxFrame->aucInfoElem[0];
-	while (prSubIEs && u2TxFrameLen >= (prSubIEs->rSubIE.ucLength + 2)) {
-		kalMemCopy(pucPayload, &prSubIEs->rSubIE,
-			   prSubIEs->rSubIE.ucLength + 2);
-		pucPayload += prSubIEs->rSubIE.ucLength + 2;
-		u2FrameLen += prSubIEs->rSubIE.ucLength + 2;
-		prSubIEs = prSubIEs->prNext;
-	}
-	nicTxSetMngPacket(prAdapter, prMsduInfo, prStaRec->ucBssIndex,
-			  prStaRec->ucIndex, WLAN_MAC_MGMT_HEADER_LEN,
-			  u2FrameLen, NULL, MSDU_RATE_MODE_AUTO);
-
-	/* 5 Enqueue the frame to send this action frame. */
-	nicTxEnqueueMsdu(prAdapter, prMsduInfo);
-}
-
-VOID rlmProcessNeighborReportResponse(P_ADAPTER_T prAdapter,
-				     P_WLAN_ACTION_FRAME prAction,
-				     UINT_16 u2PacketLen)
-{
-	P_ACTION_NEIGHBOR_REPORT_FRAME_T prNeighborResponse =
-		(P_ACTION_NEIGHBOR_REPORT_FRAME_T)prAction;
-
-	ASSERT(prAdapter);
-	ASSERT(prNeighborResponse);
-	DBGLOG(RLM, INFO, "Neighbor Resp From " MACSTR ", DialogToken %d\n",
-	       MAC2STR(prNeighborResponse->aucSrcAddr),
-	       prNeighborResponse->ucDialogToken);
-	aisCollectNeighborAP(
-		prAdapter, &prNeighborResponse->aucInfoElem[0],
-		u2PacketLen - OFFSET_OF(ACTION_NEIGHBOR_REPORT_FRAME_T,
-					aucInfoElem),
-		0);
-}
-#endif
 
 #if CFG_SUPPORT_QUIET
 VOID rrmQuietIeNotExist(

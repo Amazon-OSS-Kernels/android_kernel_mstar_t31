@@ -1077,13 +1077,11 @@ kalIndicateStatusAndComplete(IN P_GLUE_INFO_T prGlueInfo, IN WLAN_STATUS eStatus
 							  ieee80211_channel_to_frequency
 							  (ucChannelNum, KAL_BAND_5GHZ));
 			}
-#if KERNEL_VERSION(4, 1, 0) <= CFG80211_VERSION_CODE
-			bss = cfg80211_get_bss(priv_to_wiphy(prGlueInfo), prChannel, arBssid,
-					       ssid.aucSsid, ssid.u4SsidLen, IEEE80211_BSS_TYPE_ESS, IEEE80211_PRIVACY_ANY);
-#else
+
+			/* ensure BSS exists */
 			bss = cfg80211_get_bss(priv_to_wiphy(prGlueInfo), prChannel, arBssid,
 					       ssid.aucSsid, ssid.u4SsidLen, WLAN_CAPABILITY_ESS, WLAN_CAPABILITY_ESS);
-#endif
+
 			if (bss == NULL) {
 #if (BUILD_DBG_MSG == 1)
 				DBGLOG(INIT, EVENT, "Cannot get BSS from cfg80211 [ssid:%s]\n", ssid.aucSsid);
@@ -1099,7 +1097,7 @@ kalIndicateStatusAndComplete(IN P_GLUE_INFO_T prGlueInfo, IN WLAN_STATUS eStatus
 								CFG80211_BSS_FTYPE_PRESP,
 								arBssid,
 								0,	/* TSF */
-								prBssDesc->u2CapInfo,
+								WLAN_CAPABILITY_ESS,
 								prBssDesc->u2BeaconInterval,	/* beacon interval */
 								prBssDesc->aucIEBuf,	/* IE */
 								prBssDesc->u2IELength,	/* IE Length */
@@ -1108,7 +1106,7 @@ kalIndicateStatusAndComplete(IN P_GLUE_INFO_T prGlueInfo, IN WLAN_STATUS eStatus
 #else
 					bss = cfg80211_inform_bss(priv_to_wiphy(prGlueInfo), prChannel,
 								  arBssid, 0,	/* TSF */
-								  prBssDesc->u2CapInfo,
+								  WLAN_CAPABILITY_ESS,
 								  prBssDesc->u2BeaconInterval,	/* beacon interval */
 								  prBssDesc->aucIEBuf,	/* IE */
 								  prBssDesc->u2IELength,	/* IE Length */
@@ -2424,22 +2422,14 @@ kalIoctlTimeout(IN P_GLUE_INFO_T prGlueInfo,
 	/* <6> Check if we use the command queue */
 	prIoReq->u4Flag = fgCmd;
 
-	/* <7> schedule the OID bit
-	 * Use memory barrier to ensure OidEntry is written done and then set
-	 * bit.
-	 */
-	smp_mb();
+	/* <7> schedule the OID bit */
 	set_bit(GLUE_FLAG_OID_BIT, &prGlueInfo->ulFlag);
 
 	/* <7.1> Hold wakelock to ensure OS won't be suspended */
 	KAL_WAKE_LOCK_TIMEOUT(prGlueInfo->prAdapter, &prGlueInfo->rTimeoutWakeLock,
 		MSEC_TO_JIFFIES(prGlueInfo->prAdapter->rWifiVar.u4WakeLockThreadWakeup));
 
-	/* <8> Wake up main thread to handle kick start the I/O request.
-	 * Use memory barrier to ensure set bit is done and then wake up main
-	 * thread.
-	 */
-	smp_mb();
+	/* <8> Wake up tx thread to handle kick start the I/O request */
 	wake_up_interruptible(&prGlueInfo->waitq);
 
 	/* <9> Block and wait for event or timeout, current the timeout is 2 secs */
@@ -3419,6 +3409,7 @@ static int idme_get_mac_addr(unsigned char *mac_addr, size_t addr_len)
 	int i, mac[IFHWADDRLEN];
 	mm_segment_t old_fs;
 	struct file *f;
+	size_t len;
 
 	if (!mac_addr || addr_len < IFHWADDRLEN) {
 		DBGLOG(INIT, ERROR, "invalid mac_addr ptr or buf\n");
@@ -3449,7 +3440,8 @@ static int idme_get_mac_addr(unsigned char *mac_addr, size_t addr_len)
 		str[1] = buf[i * 2 + 1];
 		if (!isxdigit(str[0]) || !isxdigit(str[1]))
 			goto bailout;
-		if (kstrtoint(str, 16, &mac[i]))
+		len = sscanf(str, "%02x", &mac[i]);
+		if (len != 1)
 			goto bailout;
 	}
 	for (i = 0; i < IFHWADDRLEN; i++)
@@ -4867,7 +4859,7 @@ BOOLEAN kalSetSdioTestPattern(IN P_GLUE_INFO_T prGlueInfo, IN BOOLEAN fgEn, IN B
 #define PROC_MET_PROF_PORT                 "met_port"
 
 struct proc_dir_entry *pMetProcDir;
-void *pMetGlobalData = NULL;
+void *pMetGlobalData;
 
 #endif
 /*----------------------------------------------------------------------------*/
@@ -5329,12 +5321,10 @@ static ssize_t kalMetWriteProcfs(struct file *file, const char __user *buffer, s
 	int u8MetProfEnable;
 
 	IN P_GLUE_INFO_T prGlueInfo;
+	ssize_t result;
 
 	u4CopySize = (count < (sizeof(acBuf) - 1)) ? count : (sizeof(acBuf) - 1);
-	if (copy_from_user(acBuf, buffer, u4CopySize)) {
-		DBGLOG(INIT, ERROR, "error of copy from user\n");
-		return -EFAULT;
-	}
+	result = copy_from_user(acBuf, buffer, u4CopySize);
 	acBuf[u4CopySize] = '\0';
 
 	if (sscanf(acBuf, " %d %d", &u8MetProfEnable, &u16MetUdpPort) == 2)
@@ -5352,14 +5342,12 @@ static ssize_t kalMetCtrlWriteProcfs(struct file *file, const char __user *buffe
 	char acBuf[128 + 1];	/* + 1 for "\0" */
 	UINT_32 u4CopySize;
 	int u8MetProfEnable;
+	ssize_t result;
 
 	IN P_GLUE_INFO_T prGlueInfo;
 
 	u4CopySize = (count < (sizeof(acBuf) - 1)) ? count : (sizeof(acBuf) - 1);
-	if (copy_from_user(acBuf, buffer, u4CopySize)) {
-		DBGLOG(INIT, ERROR, "error of copy from user\n");
-		return -EFAULT;
-	}
+	result = copy_from_user(acBuf, buffer, u4CopySize);
 	acBuf[u4CopySize] = '\0';
 
 	if (sscanf(acBuf, " %d", &u8MetProfEnable) == 1)
@@ -5376,14 +5364,12 @@ static ssize_t kalMetPortWriteProcfs(struct file *file, const char __user *buffe
 	char acBuf[128 + 1];	/* + 1 for "\0" */
 	UINT_32 u4CopySize;
 	int u16MetUdpPort;
+	ssize_t result;
 
 	IN P_GLUE_INFO_T prGlueInfo;
 
 	u4CopySize = (count < (sizeof(acBuf) - 1)) ? count : (sizeof(acBuf) - 1);
-	if (copy_from_user(acBuf, buffer, u4CopySize)) {
-		DBGLOG(INIT, ERROR, "error of copy from user\n");
-		return -EFAULT;
-	}
+	result = copy_from_user(acBuf, buffer, u4CopySize);
 	acBuf[u4CopySize] = '\0';
 
 	if (sscanf(acBuf, " %d", &u16MetUdpPort) == 1)
@@ -5453,12 +5439,6 @@ int kalMetRemoveProcfs(IN P_GLUE_INFO_T prGlueInfo)
 		DBGLOG(INIT, WARN, "remove proc fs fail: proc_net == NULL\n");
 		return -ENOENT;
 	}
-
-	if (pMetGlobalData == NULL) {
-		DBGLOG(INIT, WARN, "Skip MET remove Procfs due to init was not done\n");
-		return 0;
-	}
-
 	remove_proc_entry(PROC_MET_PROF_CTRL, pMetProcDir);
 	remove_proc_entry(PROC_MET_PROF_PORT, pMetProcDir);
 	/* remove root directory (proc/net/wlan0) */
@@ -5654,7 +5634,7 @@ VOID kalWowProcess(IN P_GLUE_INFO_T prGlueInfo, UINT_8 enable)
 				NULL,
 				0);
 
-	/* ARP and DHCP offload */
+	/* ARP offload */
 	wlanSetSuspendMode(prGlueInfo, enable);
 	/* p2pSetSuspendMode(prGlueInfo, TRUE); */
 
@@ -5836,37 +5816,6 @@ INT_32 kalPmResumeHandler(struct notifier_block *notifier, unsigned long pm_even
 	return NOTIFY_DONE;
 }
 #endif
-
-void kal_sched_set(struct task_struct *p, int policy,
-		const struct sched_param *param,
-		int nice)
-{
-#if !defined(CONFIG_ANDROID) && (KERNEL_VERSION(5, 9, 0) <= LINUX_VERSION_CODE)
-	/* apply auto-detection based on function description
-	* TODO:
-	* kernel prefer modify "current" only, add sanity here?
-	*/
-
-#if KERNEL_VERSION(5, 14, 0) <= LINUX_VERSION_CODE
-	struct sched_attr attr = {
-		.sched_policy = policy,
-		.sched_priority = param->sched_priority,
-		.sched_nice = nice,
-	};
-
-	sched_setattr_nocheck(p, &attr);
-#else
-	if (policy == SCHED_NORMAL)
-		sched_set_normal(p, nice);
-	else if (policy == SCHED_FIFO)
-		sched_set_fifo(p);
-	else
-		sched_set_fifo_low(p);
-#endif /* KERNEL_VERSION(5, 14, 0) <= LINUX_VERSION_CODE */
-#else
-	sched_setscheduler(p, policy, param);
-#endif
-}
 
 WLAN_STATUS kalUpdateBssChannel(IN P_GLUE_INFO_T prGlueInfo,
 						IN UINT_8 aucSSID[],
