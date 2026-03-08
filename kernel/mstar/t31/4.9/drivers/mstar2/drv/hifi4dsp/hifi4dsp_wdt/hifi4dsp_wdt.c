@@ -33,7 +33,8 @@ struct mtk_dsp_wdt_dev {
     void __iomem *dsp_wdt_base;;
     unsigned int dsp_wdt_irq_id;
     u32 dsp_wdt_gpio;
-	u32 dsp_wdt_inverse;
+    u32 dsp_wdt_inverse;
+    u32 dsp_wdt_is_enabled;
 };
 
 static struct workqueue_struct *dsp_wdt_queue;
@@ -250,6 +251,9 @@ static int mtk_dsp_wdt_probe(struct platform_device *pdev)
 		devm_kfree(&pdev->dev, mtk_dsp_wdt);
 		return err;
 	}
+    else {
+        mtk_dsp_wdt->dsp_wdt_is_enabled = 1;
+    }
 
     register_adsp_wdt_notifier(&dbg_show_log_notifier);
 #ifdef CONFIG_MTK_HIFI4DSP_WDT_RECOVER_SUPPORT
@@ -264,26 +268,52 @@ static int mtk_dsp_wdt_probe(struct platform_device *pdev)
 
 void mtk_dsp_wdt_disable(void)
 {
+    int ret;
     pr_info("Disable DSP WDT interruption \n");
     struct mtk_dsp_wdt_dev *dev = dev_get_drvdata(&gpdev->dev);
-    free_gpio_irq(dev->dsp_wdt_gpio, &gpdev->dev);
+    if (dev->dsp_wdt_is_enabled) {
+        ret = free_gpio_irq(dev->dsp_wdt_gpio, &gpdev->dev);
+        if (ret != 0) {
+            pr_err(" %s: failed to free irq %d(err:%d)\n", __func__, dev->dsp_wdt_gpio, ret);
+        }
+        else {
+            dev->dsp_wdt_is_enabled = 0;
+        }
+    }
+    else
+        pr_info("Already DSP WDT is disabled.\n");
 }
 void mtk_dsp_wdt_enable(void)
 {
     int ret;
     pr_info("Enable DSP WDT interruption \n");
     struct mtk_dsp_wdt_dev *dev = dev_get_drvdata(&gpdev->dev);
-    ret = request_gpio_irq(dev->dsp_wdt_gpio, mtk_dsp_wdt_isr, (dev->dsp_wdt_inverse ? IRQF_TRIGGER_RISING : IRQF_TRIGGER_FALLING), &gpdev->dev);
-    if (ret != 0) {
-        pr_err(" %s: failed to request irq %d(err:%d)\n", __func__, dev->dsp_wdt_gpio, ret);
+    if (!dev->dsp_wdt_is_enabled) {
+        ret = request_gpio_irq(dev->dsp_wdt_gpio, mtk_dsp_wdt_isr, (dev->dsp_wdt_inverse ? IRQF_TRIGGER_RISING : IRQF_TRIGGER_FALLING), &gpdev->dev);
+        if (ret != 0) {
+            pr_err(" %s: failed to request irq %d(err:%d)\n", __func__, dev->dsp_wdt_gpio, ret);
+        }
+        else {
+            dev->dsp_wdt_is_enabled = 1;
+        }
     }
+    else
+        pr_info("Already DSP WDT is enabled.\n");
 }
 
 static int mtk_dsp_wdt_pm_suspend(struct device *device)
 {
+    int ret;
 	struct mtk_dsp_wdt_dev *dev = dev_get_drvdata(device);
 	pr_info("%s is suspend, disabled irq\n", __func__);
-	free_gpio_irq(dev->dsp_wdt_gpio, device);
+	ret = free_gpio_irq(dev->dsp_wdt_gpio, device);
+    if (ret != 0) {
+        pr_err(" %s: failed to free irq %d(err:%d)\n", __func__, dev->dsp_wdt_gpio, ret);
+    }
+    else {
+        dev->dsp_wdt_is_enabled = 0;
+    }
+
 	return 0;
 }
 
@@ -296,6 +326,9 @@ static int mtk_dsp_wdt_pm_resume(struct device *device)
 	if (ret != 0) {
 		pr_err(" %s: failed to request irq %d(err:%d)\n", __func__, dev->dsp_wdt_gpio, ret);
 	}
+    else {
+        dev->dsp_wdt_is_enabled = 1;
+    }
 	return 0;
 }
 

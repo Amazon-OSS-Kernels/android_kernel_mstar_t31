@@ -1235,7 +1235,7 @@
 		irblaster-pwm_shelly = <2>;
 	};
 
-	gpio_wifi_ctl {
+	gpio_wifi_ctl: wifi_ctl {
 		compatible = "mstar,gpio-wifi-ctl";
 		wifi-ctl-gpio = <17>;
 	};
@@ -1467,7 +1467,7 @@
 		};
 		mali_gop {
 			heaptype = <0>;
-			max_size = <0x0 0xc800000>;
+			max_size = <0x0 0x38400000>;
 			normal_zone = <1>;
 		};
 		xc_frc_pq {
