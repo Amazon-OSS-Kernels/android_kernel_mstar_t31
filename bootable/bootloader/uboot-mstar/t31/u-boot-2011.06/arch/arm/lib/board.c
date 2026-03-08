@@ -50,7 +50,6 @@
 #include <onenand_uboot.h>
 #include <mmc.h>
 #include <stdio.h>
-#include <linux/ctype.h>
 // MSTAR start
 #include <MsInit.h>
 #include <ShareType.h>
@@ -108,7 +107,6 @@ extern int ufs_init(void);
 
 //#define DYNAMIC_RELOCATE_BIST 1
 
-struct rpmb_fs_partition* rpmbData;
 
 /************************************************************************
  * Coloured LED functionality
@@ -516,66 +514,35 @@ extern U32 FtlTest_PwrCutTestRun(U32 LoopCnt);
 unsigned int u32UbootStart = 0;
 unsigned int u32UbootEnd = 0;
 
-static int valid_part(char* s)
+int is_valid_ipaddr(char* pAddr)
 {
-    int n = strlen(s);
-    int i;
-
-    // length of string should not be more than 3
-    if (n > 3)
-        return 0;
-
-    // check if the string only contains digits
-    for (i=0; i<n; i++)
-        if ((s[i] >= '0' && s[i] <= '9') == false)
-            return 0;
-
-    int v = atoi(s);
-    // check if the number is between 0 to 255
-    return (v >= 0 && v <= 255);
-}
-
-static int is_valid_ipaddr(char* pAddr)
-{
+    int ipValue;
+    int isValid = 1;
     int counter = 0;
     char pStrIP[32] = {0};
 
     strncpy(pStrIP, pAddr, strlen(pAddr));
 
     char* p = strtok(pStrIP, ".");
-    while (p)
+
+    while (p && (counter < 4))
     {
-        if (valid_part(p))
+        ipValue = atoi(p);
+
+        if ((ipValue >= 0) && (ipValue <= 255))
         {
-            p = strtok(NULL, ".");
-            if (p != NULL)
-                ++counter;
+            isValid = 1;
+            counter++;
+            p=strtok(NULL, ".");
         }
         else
         {
-            return 0;
+            isValid = 0;
+            break;
         }
     }
 
-    // valid IP string must contain 3 dots
-    if (counter != 3)
-        return 0;
-    return 1;
-}
-
-static int is_valid_macaddr(char* str)
-{
-    int i;
-
-    if (str == NULL)
-        return 0;
-
-    // check input string is hexdecimal digits
-    for(i=0; i<12; i++)
-        if (isxdigit(str[i]) == 0)
-            return 0;
-
-    return 1;
+    return isValid;
 }
 
 #if defined(CONFIG_UBOOT_RPMB_RW) && defined(CONFIG_MSTAR_AUTHEN_ENABLE)
@@ -829,11 +796,6 @@ void board_init_r (gd_t *id, ulong dest_addr)
         char *macInEnv = NULL;
         if (!idme_get_var_external("eth_mac_addr", idmemacaddr, sizeof(idmemacaddr)-1) &&
             strlen((const char*)idmemacaddr) == 12) {
-           if (!is_valid_macaddr(idmemacaddr))
-           {
-               printf("idmeipaddr is invalid, mac:%s \n", idmemacaddr);
-               memset(idmemacaddr, 0, sizeof(idmemacaddr));
-           }
            snprintf(addrwithsep, sizeof(addrwithsep), "%c%c:%c%c:%c%c:%c%c:%c%c:%c%c",
                           idmemacaddr[0], idmemacaddr[1], idmemacaddr[2], idmemacaddr[3],
                           idmemacaddr[4], idmemacaddr[5], idmemacaddr[6], idmemacaddr[7],
@@ -1063,7 +1025,7 @@ void board_init_r (gd_t *id, ulong dest_addr)
 
     //uboot_version offset in rpmb partion (blk0): 96th byte
     //the toltal length of the uboot_version is 4 bytes
-    rpmbData = (struct rpmb_fs_partition*)data;
+    struct rpmb_fs_partition* rpmbData = (struct rpmb_fs_partition*)data;
     if (rpmbData->anti_rollback_init_flag == FLAG_ANTIROLLBACK_INITIALIZED)
     {
         printf("Read uboot_version from RPMB = %x\n", rpmbData->uboot_version);

@@ -269,7 +269,6 @@ MS_BOOL msAPI_PM_Reset(void)
 EN_POWER_ON_MODE msAPI_Power_QueryPowerOnMode(void)
 {
     U8 u8PowerDownMode =  (U8)MDrv_PM_PowerOnMode();
-    U8 u8WakeupSource = (U8)MDrv_PM_GetWakeupSource();
 
     switch ( u8PowerDownMode )
     {
@@ -278,30 +277,22 @@ EN_POWER_ON_MODE msAPI_Power_QueryPowerOnMode(void)
         case PM_MODE_SLEEP:     // 0x02
         case PM_MODE_DEEPSLEEP: // 0x03
         {
-            printf("DC on, WakeupSource = 0x%x\n", u8WakeupSource);
+            printf("DC on\n");
             return EN_POWER_DC_BOOT;
         }
         // AC ON
         case PM_MODE_DEFAULT:   // 0xFF
         {
-            printf("AC on, WakeupSource = 0x%x\n", u8WakeupSource);
+            printf("AC on\n");
             return EN_POWER_AC_BOOT;
         }
         // EXCEPTION
         default:
         {
             if(u8PowerDownMode == 0xF1)
-            {
-                printf("DC on!! WakeupSource = 0x%x\n", u8WakeupSource);
-            }
-#if defined(CONFIG_MSTAR_M7632)
-            else if (u8PowerDownMode == 0xFD)
-            {
-                printf("DC on!! PowerDownMode = 0x%x, WakeupSource = 0x%x\n", u8PowerDownMode, u8WakeupSource);
-            }
-#endif
+                printf("DC on !! \n");
             else
-                printf("read PM_SLEEP_AC_DC_ON error, PowerDownMode = 0x%x, WakeupSource = 0x%x\n", u8PowerDownMode, u8WakeupSource);
+                printf("read PM_SLEEP_AC_DC_ON error\n");
 
             return EN_POWER_DC_BOOT;
         }
