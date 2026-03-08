@@ -79,11 +79,11 @@
 #define LED_PWMGPIO_BREATH           0xBD // Led will begin to breath
 #define PWM_LED_PERIOD_MAX           0x200
 
-/* New command for ABC123 */
-#define LED_PWMGPIO_LIGHT_1_ABC123             0xD0
-#define LED_PWMGPIO_DARK_1_ABC123              0xD1
-#define LED_PWMGPIO_FLICKER_WITH_PARA_1_ABC123        0xD8
-#define LED_PWMGPIO_FLICKER_WITH_PARA_2_ABC123        0xD9
+/* New command for Boxer */
+#define LED_PWMGPIO_LIGHT_1_BOXER             0xD0
+#define LED_PWMGPIO_DARK_1_BOXER              0xD1
+#define LED_PWMGPIO_FLICKER_WITH_PARA_1_BOXER        0xD8
+#define LED_PWMGPIO_FLICKER_WITH_PARA_2_BOXER        0xD9
 
 typedef enum
 {
@@ -425,33 +425,7 @@ int do_led_pwm(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
     }
     else
     {
-#ifdef LED_1_INVERT
-        if (LED_1_INVERT())
-        {
-            MDrv_PM_PWM_Polarity(TRUE);
-        }
-        else
-#endif
-        {
-            MDrv_PM_PWM_Polarity(FALSE);
-        }
         MDrv_PM_PWM_DutyCycle((PWM_LED_PERIOD_MAX * (fPercentage)) / 100);
-    }
-
-    // PATCH: seems duty 0% has issue for some LED modules, use this way to turn OFF LED
-    if (fPercentage == 0.0)
-    {
-#ifdef LED_1_INVERT
-        if (LED_1_INVERT())
-        {
-            MDrv_PM_PWM_Polarity(FALSE);
-        }
-        else
-#endif
-        {
-            MDrv_PM_PWM_Polarity(TRUE);
-        }
-        MDrv_PM_PWM_DutyCycle((PWM_LED_PERIOD_MAX * (100.0)) / 100);
     }
 
     UBOOT_TRACE("OK\n");
@@ -505,21 +479,21 @@ int do_led_pwm_pattern(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[]
         u8Parameter = simple_strtoul(argv[2], NULL, 16);
         SetPwmLed(LED_PWMGPIO_INVERT_1, u8Parameter, 0, 0);
     }
-    else if(strncmp(argv[1], "LIGHT_1_ABC123", 20) == 0)
+    else if(strncmp(argv[1], "LIGHT_1_BOXER", 20) == 0)
     {
-        SetPwmLed(LED_PWMGPIO_LIGHT_1_ABC123, 0, 0, 0);
+        SetPwmLed(LED_PWMGPIO_LIGHT_1_BOXER, 0, 0, 0);
     }
-    else if(strncmp(argv[1], "DARK_1_ABC123", 20) == 0)
+    else if(strncmp(argv[1], "DARK_1_BOXER", 20) == 0)
     {
-        SetPwmLed(LED_PWMGPIO_DARK_1_ABC123, 0, 0, 0);
+        SetPwmLed(LED_PWMGPIO_DARK_1_BOXER, 0, 0, 0);
     }
-    else if(strncmp(argv[1], "BLINK_500_1_ABC123", 20) == 0)
+    else if(strncmp(argv[1], "BLINK_500_1_BOXER", 20) == 0)
     {
-        SetPwmLed(LED_PWMGPIO_FLICKER_WITH_PARA_1_ABC123, 0, 50, 50);
+        SetPwmLed(LED_PWMGPIO_FLICKER_WITH_PARA_1_BOXER, 0, 50, 50);
     }
-    else if(strncmp(argv[1], "BLINK_500_2_ABC123", 20) == 0)
+    else if(strncmp(argv[1], "BLINK_500_2_BOXER", 20) == 0)
     {
-        SetPwmLed(LED_PWMGPIO_FLICKER_WITH_PARA_2_ABC123, 0, 50, 50);
+        SetPwmLed(LED_PWMGPIO_FLICKER_WITH_PARA_2_BOXER, 0, 50, 50);
     }
     else
     {

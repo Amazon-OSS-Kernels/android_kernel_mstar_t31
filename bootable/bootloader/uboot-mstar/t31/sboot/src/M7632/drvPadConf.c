@@ -2110,7 +2110,7 @@ _MEMMAP_REGBANK_32_,
         //reg_pwm1_mode
         _RVM1(0x2990, 0, BIT4),   //reg[322990]#4 = 0b
         //reg_allpad_in
-        _RVM1(0x29e0, 0, BIT0),   //reg[3229e0]#0 = 0b
+        //_RVM1(0x29e0, 0, BIT0),   //reg[3229e0]#0 = 0b
 _MEMMAP_REGBANK_10_,
     #endif
 
@@ -3400,20 +3400,6 @@ _MEMMAP_REGBANK_10_,
 
 _MEMMAP_REGBANK_32_,
     _RVM1(0x2e20, CONFIG_I2S_OUT_BCK_MODE1, BITMASK(5:4)),
-_MEMMAP_REGBANK_10_,
-#endif
-#endif
-
-// I2S_OUT_WCK
-#ifdef PADS_I2S_OUT_WCK
-#if (PADS_I2S_OUT_WCK != CONFIG_PADMUX_UNKNOWN)
-#define CONFIG_I2S_OUT_WCK_MODE1 ((PADS_I2S_OUT_WCK == CONFIG_PADMUX_MODE1) ? (0x00 << 4) : \
-                                  (PADS_I2S_OUT_WCK == CONFIG_PADMUX_MODE2) ? (0x01 << 4) : \
-                                  (PADS_I2S_OUT_WCK == CONFIG_PADMUX_MODE3) ? (0x02 << 4) : \
-                                  (PADS_I2S_OUT_WCK == CONFIG_PADMUX_MODE4) ? (0x03 << 4) : (0x02 << 4))
-
-_MEMMAP_REGBANK_32_,
-    _RVM1(0x2e24, CONFIG_I2S_OUT_WCK_MODE1, BITMASK(5:4)),
 _MEMMAP_REGBANK_10_,
 #endif
 #endif
