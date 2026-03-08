@@ -1918,11 +1918,9 @@ priv_get_ndis(IN struct net_device *prNetDev, IN NDIS_TRANSPORT_STRUCT * prNdisR
 * \brief The routine handles ATE set operation.
 *
 * \param[in] pDev Net device requested.
-* \param[in] ndisReq Ndis request OID information copy from user.
-* \param[out] outputLen_p If the call is successful, returns the number of
-*                         bytes written into the query buffer. If the
-*                         call failed due to invalid length of the query
-*                         buffer, returns the amount of storage needed..
+* \param[in] prIwReqInfo pointer to iwreq structure.
+* \param[in] prIwReqData The ioctl data structure, use the field of sub-command.
+* \param[in] pcExtra the buffer with input value.
 *
 * \retval 0 On success.
 * \retval -EOPNOTSUPP If cmd is not supported.
@@ -14742,7 +14740,7 @@ int android_private_support_driver_cmd(IN struct net_device *prNetDev,
 	if (copy_from_user(&priv_cmd, prReq->ifr_data, sizeof(priv_cmd)))
 		return -EFAULT;
 
-	if (priv_cmd.total_len <= 0)
+	if (priv_cmd.total_len <= 0 || priv_cmd.total_len > PRIV_CMD_SIZE)
 		return -EINVAL;
 
 	command = kzalloc(priv_cmd.total_len, GFP_KERNEL);

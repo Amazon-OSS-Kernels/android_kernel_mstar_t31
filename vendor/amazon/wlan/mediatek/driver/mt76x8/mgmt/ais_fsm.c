@@ -2285,6 +2285,8 @@ enum _ENUM_AIS_STATE_T aisFsmJoinCompleteAction(IN struct _ADAPTER_T *prAdapter,
 				}
 			}
 		}
+		DBGLOG(AIS, STATE, "Joined BSS eBand %d channel %d ucChannelBw %d\n", prAisBssInfo->eBand,
+                       prAisBssInfo->ucPrimaryChannel, rlmDomainGetChannelBw(prAisBssInfo->ucPrimaryChannel));
 	return eNextState;
 }
 
