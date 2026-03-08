@@ -280,8 +280,13 @@ struct kbase_va_region {
 #define KBASE_REG_SHARE_BOTH        (1ul << 10)
 
 /* Space for 4 different zones */
-#define KBASE_REG_ZONE_MASK         (3ul << 11)
-#define KBASE_REG_ZONE(x)           (((x) & 3) << 11)
+#define KBASE_REG_ZONE_MASK         ((KBASE_REG_ZONE_MAX - 1ul) << 11)
+#define KBASE_REG_ZONE(x)           (((x) & (KBASE_REG_ZONE_MAX - 1ul)) << 11)
+#define KBASE_REG_ZONE_IDX(x)       (((x) & KBASE_REG_ZONE_MASK) >> 11)
+
+#if ((KBASE_REG_ZONE_MAX - 1) & 0x3) != (KBASE_REG_ZONE_MAX - 1)
+#error KBASE_REG_ZONE_MAX too large for allocation of KBASE_REG_<...> bits
+#endif
 
 /* GPU read access */
 #define KBASE_REG_GPU_RD            (1ul<<13)
@@ -742,6 +747,9 @@ void kbase_mem_pool_free_locked(struct kbase_mem_pool *pool, struct page *p,
  * @pages:    Pointer to array where the physical address of the allocated
  *            pages will be stored.
  * @partial_allowed: If fewer pages allocated is allowed
+ * @page_owner: Pointer to the task that created the Kbase context for which
+ *              the pages are being allocated. It can be NULL if the pages
+ *              won't be associated with any Kbase context.
  *
  * Like kbase_mem_pool_alloc() but optimized for allocating many pages.
  *
@@ -758,7 +766,7 @@ void kbase_mem_pool_free_locked(struct kbase_mem_pool *pool, struct page *p,
  * this lock, it should use kbase_mem_pool_alloc_pages_locked() instead.
  */
 int kbase_mem_pool_alloc_pages(struct kbase_mem_pool *pool, size_t nr_pages,
-		struct tagged_addr *pages, bool partial_allowed);
+		struct tagged_addr *pages, bool partial_allowed,struct task_struct *page_owner);
 
 /**
  * kbase_mem_pool_alloc_pages_locked - Allocate pages from memory pool
@@ -870,13 +878,16 @@ void kbase_mem_pool_set_max_size(struct kbase_mem_pool *pool, size_t max_size);
  * kbase_mem_pool_grow - Grow the pool
  * @pool:       Memory pool to grow
  * @nr_to_grow: Number of pages to add to the pool
+ * @page_owner: Pointer to the task that created the Kbase context for which
+ *              the memory pool is being grown. It can be NULL if the pages
+ *              to be allocated won't be associated with any Kbase context.
  *
  * Adds @nr_to_grow pages to the pool. Note that this may cause the pool to
  * become larger than the maximum size specified.
  *
  * Returns: 0 on success, -ENOMEM if unable to allocate sufficent pages
  */
-int kbase_mem_pool_grow(struct kbase_mem_pool *pool, size_t nr_to_grow);
+int kbase_mem_pool_grow(struct kbase_mem_pool *pool, size_t nr_to_grow,struct task_struct *page_owner);
 
 /**
  * kbase_mem_pool_trim - Grow or shrink the pool to a new size
@@ -1599,6 +1610,93 @@ static inline void kbase_mem_pool_unlock(struct kbase_mem_pool *pool)
  * @alloc: The physical allocation
  */
 void kbase_mem_evictable_mark_reclaim(struct kbase_mem_phy_alloc *alloc);
+
+/**
+ * kbase_ctx_reg_zone_end_pfn - return the end Page Frame Number of @zone
+ * @zone: zone to query
+ *
+ * Return: The end of the zone corresponding to @zone
+ */
+static inline u64 kbase_reg_zone_end_pfn(struct kbase_reg_zone *zone)
+{
+	return zone->base_pfn + zone->va_size_pages;
+}
+
+/**
+ * kbase_ctx_reg_zone_init - initialize a zone in @kctx
+ * @kctx: Pointer to kbase context
+ * @zone_bits: A KBASE_REG_ZONE_<...> to initialize
+ * @base_pfn: Page Frame Number in GPU virtual address space for the start of
+ *            the Zone
+ * @va_size_pages: Size of the Zone in pages
+ */
+static inline void kbase_ctx_reg_zone_init(struct kbase_context *kctx,
+					   unsigned long zone_bits,
+					   u64 base_pfn, u64 va_size_pages)
+{
+	struct kbase_reg_zone *zone;
+
+	lockdep_assert_held(&kctx->reg_lock);
+	WARN_ON((zone_bits & KBASE_REG_ZONE_MASK) != zone_bits);
+
+	zone = &kctx->reg_zone[KBASE_REG_ZONE_IDX(zone_bits)];
+	*zone = (struct kbase_reg_zone){
+		.base_pfn = base_pfn, .va_size_pages = va_size_pages,
+	};
+}
+
+/**
+ * kbase_ctx_reg_zone_get_nolock - get a zone from @kctx where the caller does
+ *                                 not have @kctx 's region lock
+ * @kctx: Pointer to kbase context
+ * @zone_bits: A KBASE_REG_ZONE_<...> to retrieve
+ *
+ * This should only be used in performance-critical paths where the code is
+ * resilient to a race with the zone changing.
+ *
+ * Return: The zone corresponding to @zone_bits
+ */
+static inline struct kbase_reg_zone *
+kbase_ctx_reg_zone_get_nolock(struct kbase_context *kctx,
+			      unsigned long zone_bits)
+{
+	WARN_ON((zone_bits & KBASE_REG_ZONE_MASK) != zone_bits);
+
+	return &kctx->reg_zone[KBASE_REG_ZONE_IDX(zone_bits)];
+}
+
+/**
+ * kbase_ctx_reg_zone_get - get a zone from @kctx
+ * @kctx: Pointer to kbase context
+ * @zone_bits: A KBASE_REG_ZONE_<...> to retrieve
+ *
+ * The get is not refcounted - there is no corresponding 'put' operation
+ *
+ * Return: The zone corresponding to @zone_bits
+ */
+static inline struct kbase_reg_zone *
+kbase_ctx_reg_zone_get(struct kbase_context *kctx, unsigned long zone_bits)
+{
+	lockdep_assert_held(&kctx->reg_lock);
+	WARN_ON((zone_bits & KBASE_REG_ZONE_MASK) != zone_bits);
+
+	return &kctx->reg_zone[KBASE_REG_ZONE_IDX(zone_bits)];
+}
+
+/**
+ * kbase_mem_allow_alloc - Check if allocation of GPU memory is allowed
+ * @kctx: Pointer to kbase context
+ *
+ * Don't allow the allocation of GPU memory if the ioctl has been issued
+ * from the forked child process using the mali device file fd inherited from
+ * the parent process.
+ *
+ * Return: true if allocation is allowed.
+ */
+static inline bool kbase_mem_allow_alloc(struct kbase_context *kctx)
+{
+	return (kctx->process_mm == current->mm);
+}
 
 
 #endif				/* _KBASE_MEM_H_ */
