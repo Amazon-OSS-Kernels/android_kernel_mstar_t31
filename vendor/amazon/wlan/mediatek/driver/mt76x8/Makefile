@@ -356,9 +356,7 @@ endif
 DRIVER_BUILD_DATE=$(shell date +%Y%m%d%H%M%S)
 ccflags-y += -DDRIVER_BUILD_DATE='"$(DRIVER_BUILD_DATE)"'
 
-ifeq ($(CFG_DFS_NEWCH_DFS_FORCE_DISCONNECT),y)
-	ccflags-y += -DCFG_DFS_NEWCH_DFS_FORCE_DISCONNECT=1
-else
+ifeq ($(CFG_DFS_NEWCH_DFS_FORCE_DISCONNECT),n)
 	ccflags-y += -DCFG_DFS_NEWCH_DFS_FORCE_DISCONNECT=0
 endif
 
@@ -440,6 +438,12 @@ endif
 ifneq ($(CFG_RESET_DUE_TO_REG_NETDEV_FAIL),)
 ccflags-y += -DCFG_RESET_DUE_TO_REG_NETDEV_FAIL=$(CFG_RESET_DUE_TO_REG_NETDEV_FAIL)
 endif
+
+ifneq ($(CFG_FTV_62866_PATCH),)
+ccflags-y += -DCFG_FTV_62866_PATCH=$(CFG_FTV_62866_PATCH)
+endif
+
+
 
 # ---------------------------------------------------
 # Directory List
@@ -581,6 +585,7 @@ ccflags-y += -DCFG_PREALLOC_MEMORY
 ccflags-y += -I$(src)/prealloc/include
 MODULE_NAME_PREALLOC = $(MODULE_NAME)_prealloc
 PREALLOC_OBJS := prealloc/prealloc.o
+PREALLOC_OBJS += prealloc/chip_reset_info.o
 $(MODULE_NAME_PREALLOC)-objs += $(PREALLOC_OBJS)
 obj-m += $(MODULE_NAME_PREALLOC).o
 endif
