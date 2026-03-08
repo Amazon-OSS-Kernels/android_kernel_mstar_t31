@@ -32,8 +32,8 @@ else ifeq ($(TARGET_PRODUCT), ABC)
 DEFINES += -DUFBL_PROJ_ABC
 else ifeq ($(TARGET_PRODUCT), hailey)
 DEFINES += -DUFBL_PROJ_HAILEY
-else ifeq ($(TARGET_PRODUCT), ABC)
-DEFINES += -DUFBL_PROJ_ABC
+else ifeq ($(TARGET_PRODUCT), juliana)
+DEFINES += -DUFBL_PROJ_JULIANA
 else ifeq ($(TARGET_PRODUCT), ABC)
 DEFINES += -DUFBL_PROJ_ABC
 else ifeq ($(TARGET_PRODUCT), shelly)
