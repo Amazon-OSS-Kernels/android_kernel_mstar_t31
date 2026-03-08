@@ -3,6 +3,7 @@
 - [Amazon Fire TV Smart TV   Hisense U6 Series](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/hisense_u6_series/hisense_qled_firetvedition_4k_uhd-7.6.0.2-20220922)
 - [Amazon Fire TV Smart TV   JVC 4K UHD Smart TV](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/jvc_4k_uhd_smart_tv/jvc_uhd_firetv_2021-7.6.2.4-20230320)
 - [Amazon Fire TV Smart TV   JVC Smart TV 4K HDR10+](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/jvc_smart_tv_4k_hdr10/jvc_uhd_firetv_2021-7.6.0.3-20230519)
+- [Amazon Fire TV Smart TV   Nokia Smart TV](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/nokia_smart_tv/nokia_uhd_firetv_2022-7.6.0.0-20230405)
 - [Amazon Fire TV Smart TV   Toshiba 4K UHD (2021 Release)](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/toshiba_4k_uhd_2021_release/amazonfiretvedition_4k_uhd-7.6.2.4-20230215)
 - [Amazon Fire TV Smart TV   Toshiba and Insignia 4K](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/toshiba_and_insignia_4k/amazonfiretvedition_4k_uhd-7.6.2.4-20230216)
 - [Amazon Fire TV Smart TV   Toshiba Class M550 Series LED 4K UHD](https://github.com/Amazon-OSS-Kernels/android_kernel_mstar_t31/tree/toshiba_class_m550_series_led_4k_uhd/amazonfiretvedition_4k_uhd-7.6.4.6-20230601)
