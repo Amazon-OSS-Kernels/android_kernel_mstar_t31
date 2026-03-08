@@ -71,9 +71,11 @@
  */
 #define MTK_SPI_BUFSIZ    max(32, SMP_CACHE_BYTES)
 
+#define DEFAULT_SPI_MODE_SINGLE_HALF_DUPLEX (3)
 #define DEFAULT_SPI_MODE_QUAD    (2)
 #define DEFAULT_SPI_MODE_DUAL    (1)
 #define DEFAULT_SPI_MODE_SINGLE  (0)
+#define SPI_FULL_DUPLEX_TRANSFER (80)
 #define SPI_READ             true
 #define SPI_WRITE             false
 #define SPI_READ_STA_ERR_RET    (1)
@@ -82,7 +84,7 @@
 #define SPI_FREQ_26M        (26*1000*1000)
 #define SPI_FREQ_13M        (13*1000*1000)
 
-int default_spi_mode = DEFAULT_SPI_MODE_SINGLE;
+int default_spi_mode = DEFAULT_SPI_MODE_SINGLE_HALF_DUPLEX;
 
 /* HIFI4DSP specific SPI data */
 struct mtk_hifi4dsp_spi_data {
@@ -94,6 +96,7 @@ struct mtk_hifi4dsp_spi_data {
 static DEFINE_MUTEX(hifi4dsp_bus_lock);
 static struct mtk_hifi4dsp_spi_data hifi4dsp_spi_data;
 static int hifi4dsp_spi_init_done;
+static int g_config_Mode_init;
 
 static inline void *kvzalloc(size_t size, gfp_t flags) {
 	void *ret;
@@ -130,9 +133,10 @@ int spi_config_MSB(void)
     u32 speed = SPI_SPEED_LOW;
     struct spi_message message;
 
-    if (default_spi_mode == DEFAULT_SPI_MODE_DUAL) {
+    if (default_spi_mode == DEFAULT_SPI_MODE_DUAL || default_spi_mode == DEFAULT_SPI_MODE_SINGLE_HALF_DUPLEX) {
         struct spi_transfer x[4];
-        u8 tx_cmd_type_dual[] = {CMD_CT, 0x05};
+		u8 tx_cmd_type_dual[] = {CMD_CT, 0x05};
+		u8 tx_cmd_type_single[] = {CMD_CT, 0x04};
         u8 tx_cmd_read_sta = CMD_RS;
         u8 rx_cmd_read_sta = 0;
         u8 cmd_config[9] = {CMD_CW, 0x00, 0x20,  0x04,  0x1d,  0x03,  0x00,  0x00,  0x00};
@@ -143,15 +147,15 @@ int spi_config_MSB(void)
     loop:
         spi_message_init(&message);
         memset(x, 0, sizeof(x));
-        spi_reverse_to_LSB(&tx_cmd_type_dual,ARRAY_SIZE(tx_cmd_type_dual),8);
-        x[0].tx_buf    = tx_cmd_type_dual;
-        x[0].rx_buf    = NULL;
-        x[0].len        = ARRAY_SIZE(tx_cmd_type_dual);;
-        x[0].tx_nbits    = SPI_NBITS_SINGLE;
-        x[0].rx_nbits    = SPI_NBITS_SINGLE;
-        x[0].speed_hz    = speed;
-        x[0].cs_change = 0;
-        spi_message_add_tail(&x[0], &message);
+		spi_reverse_to_LSB(&tx_cmd_type_single, ARRAY_SIZE(tx_cmd_type_single), 8);
+		x[0].tx_buf    = tx_cmd_type_single;
+		x[0].rx_buf    = NULL;
+		x[0].len        = ARRAY_SIZE(tx_cmd_type_single);
+		x[0].tx_nbits    = SPI_NBITS_SINGLE;
+		x[0].rx_nbits    = SPI_NBITS_SINGLE;
+		x[0].speed_hz    = speed;
+		x[0].cs_change = 0;
+		spi_message_add_tail(&x[0], &message);
 
         spi_reverse_to_LSB(&cmd_config,ARRAY_SIZE(cmd_config),8);
         x[1].tx_buf    = cmd_config;
@@ -221,15 +225,15 @@ int spi_config_MSB(void)
             x[3].cs_change = 1;
             spi_message_add_tail(&x[3], &message);
 
-            spi_reverse_to_LSB(&tx_wdata,ARRAY_SIZE(tx_wdata),8);
-            x[0].tx_buf =tx_wdata;
-            x[0].rx_buf    = NULL;
-            x[0].tx_nbits = SPI_NBITS_DUAL;
-            x[0].rx_nbits = SPI_NBITS_DUAL;
-            x[0].len = ARRAY_SIZE(tx_wdata);
-            x[0].speed_hz = speed;
-            x[0].cs_change = 0;
-            spi_message_add_tail(&x[0], &message);
+			spi_reverse_to_LSB(&tx_wdata, ARRAY_SIZE(tx_wdata), 8);
+			x[0].tx_buf = tx_wdata;
+			x[0].rx_buf    = NULL;
+			x[0].tx_nbits = SPI_NBITS_SINGLE;
+			x[0].rx_nbits = SPI_NBITS_SINGLE;
+			x[0].len = ARRAY_SIZE(tx_wdata);
+			x[0].speed_hz = speed;
+			x[0].cs_change = 0;
+			spi_message_add_tail(&x[0], &message);
 
             /*
             * Check SPI-Slave Read Status,
@@ -398,18 +402,18 @@ static int spi_config_type_wr(struct spi_device *spi, int type, u32 addr,
     void *buffer;
     struct spi_message message;
 
-    if (default_spi_mode == DEFAULT_SPI_MODE_DUAL) {
+    if (len > SPI_FULL_DUPLEX_TRANSFER) {
         u8 tx_cmd_read_sta = CMD_RS;
         u8 rx_cmd_read_sta = 0;
         struct spi_transfer x[4];
     loop:
         spi_message_init(&message);
         memset(x, 0, sizeof(x));
-        if (type == 2) {
+		if (type == DEFAULT_SPI_MODE_QUAD) {
             buffer = tx_cmd_type_quad;
-        } else if (type == 1) {
+		} else if (type == DEFAULT_SPI_MODE_DUAL) {
             buffer = tx_cmd_type_dual;
-        } else if (type == 0) {
+		} else if (type == DEFAULT_SPI_MODE_SINGLE || type == DEFAULT_SPI_MODE_SINGLE_HALF_DUPLEX) {
             buffer = tx_cmd_type_single;
         } else {
             status = -EINVAL;
@@ -417,14 +421,17 @@ static int spi_config_type_wr(struct spi_device *spi, int type, u32 addr,
             goto tail;
         }
 
-        x[0].tx_buf    = buffer;
-        x[0].rx_buf    = NULL;
-        x[0].len        = ARRAY_SIZE(tx_cmd_type_single);
-        x[0].tx_nbits    = SPI_NBITS_SINGLE;
-        x[0].rx_nbits    = SPI_NBITS_SINGLE;
-        x[0].speed_hz    = speed;
-        x[0].cs_change = 0;
-        spi_message_add_tail(&x[0], &message);
+		if (!g_config_Mode_init) {
+			x[0].tx_buf    = buffer;
+			x[0].rx_buf    = NULL;
+			x[0].len        = ARRAY_SIZE(tx_cmd_type_single);
+			x[0].tx_nbits    = SPI_NBITS_SINGLE;
+			x[0].rx_nbits    = SPI_NBITS_SINGLE;
+			x[0].speed_hz    = speed;
+			x[0].cs_change = 0;
+			spi_message_add_tail(&x[0], &message);
+			g_config_Mode_init = 1;
+		}
 
         if (wr)
             cmd_config[0] = CMD_CR;
@@ -476,9 +483,9 @@ static int spi_config_type_wr(struct spi_device *spi, int type, u32 addr,
         //printk("[MSPI]  %s :: %d  rx_cmd_read_sta[0] = 0x%2x,rx_cmd_read_sta[1] = 0x%2x,\n",__FUNCTION__,__LINE__,rx_cmd_read_sta[0],rx_cmd_read_sta[1]);
         read_status = rx_cmd_read_sta;
         if ((read_status & CONFIG_READY) != CONFIG_READY) {
-    		pr_notice("SPI slave status error: 0x%x, line:%d\n",
+			printk_ratelimited("SPI slave status error: 0x%x, line:%d\n",
                         read_status, __LINE__);
-            printk("[MSPI] cmd = 0x%02x , 0x%02x , 0x%02x , 0x%02x , 0x%02x , 0x%02x , 0x%02x , 0x%02x , 0x%02x\n",
+			printk_ratelimited("[MSPI] cmd = 0x%02x , 0x%02x , 0x%02x , 0x%02x , 0x%02x , 0x%02x , 0x%02x , 0x%02x , 0x%02x\n",
             cmd_config[0],cmd_config[1],cmd_config[2],cmd_config[3],cmd_config[4],cmd_config[5],
             cmd_config[6],cmd_config[7],cmd_config[8]);
 
@@ -487,7 +494,7 @@ static int spi_config_type_wr(struct spi_device *spi, int type, u32 addr,
         }
     tail:
         if (status) {
-    		pr_notice("config type & addr & len err, line(%d), type(%d), ret(%d)\n",
+			printk_ratelimited("config type & addr & len err, line(%d), type(%d), ret(%d)\n",
                     __LINE__, type, status);
         }
     }
@@ -500,11 +507,11 @@ static int spi_config_type_wr(struct spi_device *spi, int type, u32 addr,
         memset(x, 0, sizeof(x));
         memset(rx_cmd_read_sta, 0, ARRAY_SIZE(rx_cmd_read_sta));
 
-        if (type == 2) {
+		if (type == DEFAULT_SPI_MODE_QUAD) {
             buffer = tx_cmd_type_quad;
-        } else if (type == 1) {
+		} else if (type == DEFAULT_SPI_MODE_DUAL) {
             buffer = tx_cmd_type_dual;
-        } else if (type == 0) {
+		} else if (type == DEFAULT_SPI_MODE_SINGLE || type == DEFAULT_SPI_MODE_SINGLE_HALF_DUPLEX) {
             buffer = tx_cmd_type_single;
         } else {
             status = -EINVAL;
@@ -512,12 +519,15 @@ static int spi_config_type_wr(struct spi_device *spi, int type, u32 addr,
             goto tail;
         }
 
-        x[0].tx_buf    = buffer;
-        x[0].len        = ARRAY_SIZE(tx_cmd_type_single);
-        x[0].tx_nbits    = SPI_NBITS_SINGLE;
-        x[0].rx_nbits    = SPI_NBITS_SINGLE;
-        x[0].speed_hz    = speed;
-        spi_message_add_tail(&x[0], &message);
+		if (!g_config_Mode_init) {
+			x[0].tx_buf    = buffer;
+			x[0].len        = ARRAY_SIZE(tx_cmd_type_single);
+			x[0].tx_nbits    = SPI_NBITS_SINGLE;
+			x[0].rx_nbits    = SPI_NBITS_SINGLE;
+			x[0].speed_hz    = speed;
+			spi_message_add_tail(&x[0], &message);
+			g_config_Mode_init = 1;
+		}
 
         if (wr)
             cmd_config[0] = CMD_CR;
@@ -564,7 +574,7 @@ static int spi_config_type_wr(struct spi_device *spi, int type, u32 addr,
 		}
     tail_s:
         if (status) {
-    		printk_ratelimited("config type & addr & len err, line(%d), type(%d), ret(%d)\n",
+			printk_ratelimited("config type & addr & len err, line(%d), type(%d), ret(%d)\n",
                     __LINE__, type, status);
         }
     }
@@ -582,7 +592,7 @@ static int spi_trigger_wr_data(struct spi_device *spi,
     u8 tx_cmd_write_sta[2] = {CMD_WS, 0x01};
     u8 rx_cmd_write_sta[2] = {0, 0};
 
-    if (default_spi_mode == DEFAULT_SPI_MODE_DUAL) {
+    if (len > SPI_FULL_DUPLEX_TRANSFER) {
         struct spi_transfer x[6];
         u8 tx_cmd_read_sta = CMD_RS;
         u8 rx_cmd_read_sta = 0;
@@ -669,7 +679,7 @@ static int spi_trigger_wr_data(struct spi_device *spi,
         status = spi_sync(spi, &msg);
 
         if (status) {
-         pr_notice("write/read to slave err, line(%d), len(%d), ret(%d)\n",
+			printk_ratelimited("write/read to slave err, line(%d), len(%d), ret(%d)\n",
                     __LINE__, len, status);
             goto tail;
     	    }
@@ -677,7 +687,7 @@ static int spi_trigger_wr_data(struct spi_device *spi,
         if (((read_status & SR_RDWR_FINISH) != SR_RDWR_FINISH)
             || ((read_status & SR_RD_ERR) == SR_RD_ERR)
             || ((read_status & SR_WR_ERR) == SR_WR_ERR)) {
-    		pr_notice("SPI slave status error: 0x%x, line:%d\n",
+			printk_ratelimited("SPI slave status error: 0x%x, line:%d\n",
                     read_status, __LINE__);
             x[4].tx_buf    = tx_cmd_write_sta;
             x[4].rx_buf = NULL;
@@ -1169,7 +1179,7 @@ static ssize_t hifi4dsp_spi_store(struct device *dev,
 {
     int len, xfer_speed, ret;
 
-	default_spi_mode = DEFAULT_SPI_MODE_DUAL;
+	default_spi_mode = DEFAULT_SPI_MODE_SINGLE_HALF_DUPLEX;
 
     if (!strncmp(buf, "xfer", 4)) {
         buf += 5;
@@ -1214,6 +1224,11 @@ tail:
 	return !ret;
 }
 
+void hifi4dsp_spi_set_config_mode_status(int status)
+{
+	g_config_Mode_init = status;
+}
+
 static int hifi4dsp_spi_probe(struct spi_device *spi)
 {
     int err = 0;
@@ -1225,17 +1240,20 @@ static int hifi4dsp_spi_probe(struct spi_device *spi)
         pr_info("mt8570 is not supported\n");
         return -EINVAL;
     }
-    char *ptr = NULL;
+
     u32 spi_cfg = 0;
-    ptr = strstr(saved_command_line, "SPI_MODE=1");
-    if (ptr) {
-        printk ("default_spi_mode =dual mode\n");
-        default_spi_mode = DEFAULT_SPI_MODE_DUAL;
-    }
-    else {
-        default_spi_mode = DEFAULT_SPI_MODE_SINGLE;
-        printk ("default_spi_mode =single mode\n");
-    }
+
+	if (strstr(saved_command_line, "SPI_MODE=2")) {
+		default_spi_mode = DEFAULT_SPI_MODE_DUAL;
+		printk ("default_spi_mode =dual mode\n");
+	} else if (strstr(saved_command_line, "SPI_MODE=1")) {
+		default_spi_mode = DEFAULT_SPI_MODE_SINGLE;
+		printk ("default_spi_mode =single mode & full duplex\n");
+	} else {
+		default_spi_mode = DEFAULT_SPI_MODE_SINGLE_HALF_DUPLEX;
+		printk ("default_spi_mode =single mode & half duplex\n");
+	}
+
     pr_info("%s() enter.\n", __func__);
 
     data = kzalloc(sizeof(struct mtk_chip_config), GFP_KERNEL);
@@ -1274,6 +1292,8 @@ static int hifi4dsp_spi_probe(struct spi_device *spi)
         printk("Start to run kthread [breed_hifi4dsp].\n");
 #endif
     spi_create_attribute(&spi->dev);
+	g_config_Mode_init = 0;
+
     hifi4dsp_spi_init_done = 1;
 tail:
 	return err;
