@@ -880,14 +880,33 @@ int mtk_cfg80211_scan(struct wiphy *wiphy, struct cfg80211_scan_request *request
 	UINT_32 i, u4BufLen;
 	PARAM_SCAN_REQUEST_ADV_T rScanRequest;
 
+#if CFG_CHIP_RESET_SUPPORT
+	int iCount = 0;
+	BOOLEAN fgIsResetDone = FALSE;
+#endif
+
 	prGlueInfo = (P_GLUE_INFO_T) wiphy_priv(wiphy);
 	ASSERT(prGlueInfo);
 	kalMemZero(&rScanRequest, sizeof(rScanRequest));
 
 #if CFG_CHIP_RESET_SUPPORT
 	if (checkResetState()) {
-		DBGLOG(INIT, WARN, "wlan is halt, skip scan");
-		return WLAN_STATUS_FAILURE;
+		DBGLOG(INIT, WARN, "wlan is halt, wait for 500ms\n");
+		while (iCount < 25) {
+			kalMsleep(20);
+			if (!checkResetState()) {
+				fgIsResetDone = TRUE;
+				DBGLOG(INIT, WARN,
+					"Reset is done. Wait time: %d, fgIsResetDone = %d\n", iCount * 20, fgIsResetDone);
+				break;
+			}
+			iCount++;
+		}
+		if (!fgIsResetDone) {
+			DBGLOG(INIT, WARN,
+				"Reset is not done. Wait time: %d, fgIsResetDone = %d\n", iCount * 20, fgIsResetDone);
+			return WLAN_STATUS_FAILURE;
+		}
 	}
 	rst_data.entry_conut++;
 	DBGLOG(INIT, TRACE, "entry_conut = %d\n", rst_data.entry_conut);
