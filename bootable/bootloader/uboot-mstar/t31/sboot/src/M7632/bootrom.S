@@ -1493,10 +1493,10 @@ amzn_identifier:
     // sboot version <LO, HI>
     .byte 0x0f, 0x00
     .ascii "HAIL"
-#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ABCD)
+#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_TEDDY)
     // sboot version <LO, HI>
     .byte 0x07, 0x00
-    .ascii "ABCD"
+    .ascii "TEDDY"
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_JULIANA)
     // sboot version <LO, HI>
     .byte 0x0e, 0x00
