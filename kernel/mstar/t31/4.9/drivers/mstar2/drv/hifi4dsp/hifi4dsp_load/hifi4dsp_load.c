@@ -35,7 +35,6 @@
 #include <linux/platform_device.h>
 #include <linux/uaccess.h>
 #include <hifi4dsp_load/hifi4dsp_load.h>
-#include <hifi4dsp_wdt/hifi4dsp_wdt.h>
 #include "mdrv_mstypes.h"
 #include <adsp_ipi.h>
 
@@ -317,8 +316,8 @@ void hifi4dsp_send_WTD_WHOLE(void)
 	kobject_uevent_env(&hifi4dsp_load->dev->kobj, KOBJ_CHANGE, envp);
 	return 0;
 }
-extern void set_DSP_DRV(void);
-void set_DSP_DRV(void)
+
+static void set_DSP_DRV(void)
 {
 	/* Configure DSP Driving */
 	/* 0 :3 mA */
@@ -364,18 +363,19 @@ static ssize_t hifi4dsp_debug_cli_write(struct file *file,
 
 	if (strncmp(buf, "reload", strlen("reload")) == 0) {
 		pr_info("SW triggered WDT. Reloading FW!!");
-		mtk_dsp_wdt_disable();
 		spi_config_MSB();
 		set_DSP_DRV();
 		hifi4dsp_rst();
 		hifi4dsp_send_WTD_WHOLE();
 		return len;
 	}
+
 	ret = adsp_ipi_send(ADSP_IPI_CLI, buf, strlen(buf), 0, 0);
 	if (ret) {
 		pr_info("send cli cmd failed\n");
 		return -EINVAL;
 	}
+
 	return len;
 }
 
@@ -792,8 +792,6 @@ static void set_hifi4dsp_run_status(void)
 	adfDebug_init((void *)adfDbgCheckRunFunc, (void *)adfDbgReadFunc, DSP_LOG_DUMP_PERIOD,
 				  log_buf_size);
 #endif
-    void mtk_dsp_wdt_enable(void);
-    mtk_dsp_wdt_enable();
 }
 
 #ifdef CONFIG_MTK_HIFI4DSP_WDT_RECOVER_SUPPORT
@@ -991,7 +989,7 @@ static int hifi4dsp_load_probe(struct platform_device *pdev)
 	return ret;
 }
 
-void hifi4dsp_stop_dsp(void)
+static void hifi4dsp_stop_dsp(void)
 {
 	/* RUN_STALL pull high */
 	spi_set_register32(REG_SEL_RESET_SW(0),
@@ -1024,10 +1022,6 @@ void hifi4dsp_hw_rst(void)
 	msleep(10);
 
 }
-void hifidsp_hw_pull_low(void)
-{
-    gpio_direction_output(hifi4dsp_load->hifi4dsp_reset_gpio, 0);
-}
 
 int hifi4dsp_rst(void)
 {
@@ -1041,7 +1035,6 @@ int hifi4dsp_rst(void)
 
 	return 0;
 }
-
 
 static int hifi4dsp_load_pm_resume(struct device *device)
 {

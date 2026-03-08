@@ -21,8 +21,8 @@ const char *amzn_target_device_name(void)
   return "skipper";
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ANNA)
   return "anna";
-#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ABC)
-  return "ABC";
+#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_TEDDY)
+  return "teddy";
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_HAILEY)
   return "hailey";
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_JULIANA)

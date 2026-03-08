@@ -1479,7 +1479,7 @@ amzn_identifier:
     .ascii "DUCK"
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_BRANDENBURG)
     // sboot version <LO, HI>
-    .byte 0x22, 0x00
+    .byte 0x20, 0x00
     .ascii "BRAN"
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_SKIPPER)
     // sboot version <LO, HI>
@@ -1487,22 +1487,22 @@ amzn_identifier:
     .ascii "SKIP"
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ANNA)
     // sboot version <LO, HI>
-    .byte 0x17, 0x00
+    .byte 0x14, 0x00
     .ascii "ANNA"
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_HAILEY)
     // sboot version <LO, HI>
     .byte 0x0e, 0x00
     .ascii "HAIL"
-#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_ABCD)
+#elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_TEDDY)
     // sboot version <LO, HI>
     .byte 0x07, 0x00
-    .ascii "ABCD"
+    .ascii "TEDDY"
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_JULIANA)
     // sboot version <LO, HI>
     .byte 0x0d, 0x00
     .ascii "JULI"
 #elif defined(CONFIG_MTK_BD_MT164B_10AT_M7632_SHELLY)
     // sboot version <LO, HI>
-    .byte 0x07, 0x00
+    .byte 0x06, 0x00
     .ascii "SHEL"
 #endif
