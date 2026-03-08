@@ -709,7 +709,8 @@ static ssize_t led_set(struct device *dev, struct device_attribute *attr,
 			LED_DRV_Ctrl(LED_OFF_1_abc123, 0, parameter2,parameter3);
 			if (action == LED_BLINK_ONCE_AND_ON_1_abc123) {
 				msleep(100);
-				LED_DRV_Ctrl(LED_ON_1_abc123, 0, parameter2,parameter3);
+				if(bled_standby_setting)
+					LED_DRV_Ctrl(LED_ON_1_abc123, 0, parameter2,parameter3);
 			}
 			msleep(400);
 			goto led_set_end;

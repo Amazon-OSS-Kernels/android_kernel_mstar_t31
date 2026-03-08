@@ -1,15 +1,6 @@
 /*
  * Copyright (c) 2022 Amazon.com, Inc. or its affiliates.  All rights reserved.
  *
- * PROPRIETARY/CONFIDENTIAL.  USE IS SUBJECT TO LICENSE TERMS.
- *
- * sinext_sc1233a_2d_normal_60db_1100us.h: Socionext generated sequencer file to configure SC1233A radar in 2d mode with chirp time of 1100us and Rx gain of 60 dB.
- *
- * Owners: @jodong,@yenvivek
- *
- * MAJOR_VERSION:1
- * MINOR_VERSION:0
- *
  */
 
 #ifndef _2D_NORMAL_60DB_1100US
