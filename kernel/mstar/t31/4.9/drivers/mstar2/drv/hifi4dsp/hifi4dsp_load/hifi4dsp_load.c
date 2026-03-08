@@ -1060,7 +1060,7 @@ static int hifi4dsp_load_pm_resume(struct device *device)
 
 	hifi4dsp_hw_rst();
 
-    /* PADS_I2S_IN_MD would conflict between abc123+ and abc123, Reconfig to CONFIG_PADMUX_MODE5 for TSLINK SPI */
+    /* PADS_I2S_IN_MD would conflict between hailey+ and hailey, Reconfig to CONFIG_PADMUX_MODE5 for TSLINK SPI */
     pr_info("[%s] Re-config PADS_I2S_IN_MD to TSLINK_SPI\n", __func__);
     REG_ADDR((0x3229<<9) + (0x12<<2)) &= ~(BIT(2)|BIT(1)|BIT(0));
     REG_ADDR((0x3229<<9) + (0x12<<2)) |= 0x05;

@@ -592,7 +592,7 @@ int MDrv_LED_Resume(void)
 #if defined(CONFIG_IDME)
 	if (strstr(saved_command_line, "product_name=brandenburg") != NULL ||
 		strstr(saved_command_line, "product_name=anna") != NULL ||
-		strstr(saved_command_line, "product_name=abc123") != NULL) {
+		strstr(saved_command_line, "product_name=cheyne") != NULL) {
 		/* Set the led inverse for brandenburg board */
 		LED_DRV_Ctrl(LED_INVERT_1, 1, 0, 0);
 		printk("[%s:%d] Set led 1 inverse\n", __FUNCTION__, __LINE__);
@@ -709,7 +709,8 @@ static ssize_t led_set(struct device *dev, struct device_attribute *attr,
 			LED_DRV_Ctrl(LED_OFF_1_abc123, 0, parameter2,parameter3);
 			if (action == LED_BLINK_ONCE_AND_ON_1_abc123) {
 				msleep(100);
-				LED_DRV_Ctrl(LED_ON_1_abc123, 0, parameter2,parameter3);
+				if(bled_standby_setting)
+					LED_DRV_Ctrl(LED_ON_1_abc123, 0, parameter2,parameter3);
 			}
 			msleep(400);
 			goto led_set_end;

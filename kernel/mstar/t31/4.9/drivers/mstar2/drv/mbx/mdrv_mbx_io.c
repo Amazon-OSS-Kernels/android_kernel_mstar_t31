@@ -112,7 +112,7 @@
 //-------------------------------------------------------------------------------------------------
 #define     MBXIO_DEBUG_ENABLE  //
 #ifdef      MBXIO_DEBUG_ENABLE
-#define     MBXIO_KDBG(_fmt, _args...)        printk(KERN_WARNING _fmt, ## _args)
+#define     MBXIO_KDBG(_fmt, _args...)        printk_ratelimited(KERN_WARNING _fmt, ## _args)
 #define     MBXIO_ASSERT(_con)   do {\
                                                             if (!(_con)) {\
                                                                 printk(KERN_CRIT "BUG at %s:%d assert(%s)\n",\
