@@ -983,8 +983,14 @@ static ssize_t mmc_life_time_show(struct device *dev,
 	card->ext_csd.device_life_time_est_typ_a = ext_csd[EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_A];
 	card->ext_csd.device_life_time_est_typ_b = ext_csd[EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_B];
 	kfree(ext_csd);
-	return snprintf(buf, sizeof(buf), "0x%02x 0x%02x\n", card->ext_csd.device_life_time_est_typ_a,
-					       card->ext_csd.device_life_time_est_typ_b);
+	if (buf) {
+		/* [sprintf] the buffer size is unknown and caller is from within so it should be safe */
+
+		return sprintf(buf, "0x%02x 0x%02x\n",  card->ext_csd.device_life_time_est_typ_a,
+							card->ext_csd.device_life_time_est_typ_b);
+	}
+	else
+	   return 0;
 }
 static DEVICE_ATTR(life_time, S_IRUGO, mmc_life_time_show, NULL);
 
@@ -1009,7 +1015,13 @@ static ssize_t mmc_pre_eol_info_show(struct device *dev,
 	mmc_put_card(card);
 	card->ext_csd.pre_eol_info = ext_csd[EXT_CSD_PRE_EOL_INFO];
 	kfree(ext_csd);
-	return snprintf(buf, sizeof(buf), "0x%02x\n", card->ext_csd.pre_eol_info);
+	if (buf) {
+	  /* [sprintf] the buffer size is unknown and caller is from within so it should be safe */
+
+	  return sprintf(buf, "0x%02x\n", card->ext_csd.pre_eol_info);
+	}
+	else
+          return 0;
 }
 static DEVICE_ATTR(pre_eol_info, S_IRUGO, mmc_pre_eol_info_show, NULL);
 
